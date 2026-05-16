@@ -1,0 +1,26 @@
+{
+  "id": "catering_service",
+  "name": "餐饮服务",
+  "version": "1.0.0",
+  "description": "餐饮行业的智能客服和订座服务",
+  "author": "agent-framework",
+  "entry": "main.py",
+  "class": "CateringService",
+  "config": {
+    "llm_model": "deepseek-chat",
+    "temperature": 0.7,
+    "max_context": 10
+  },
+  "tools": [
+    "query_menu",
+    "make_reservation",
+    "reply_review",
+    "check_business_hours"
+  ],
+  "dependencies": [],
+  "permissions": [
+    "read:tenant_data",
+    "write:conversation",
+    "write:reservation"
+  ]
+}

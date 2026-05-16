@@ -1,0 +1,43 @@
+{
+  "menu": {
+    "招牌菜": [
+      {"name": "红烧肉", "price": 68, "description": "秘制酱料，肥而不腻"},
+      {"name": "清蒸鲈鱼", "price": 88, "description": "新鲜活鱼，现点现做"},
+      {"name": "宫保鸡丁", "price": 42, "description": "经典川菜，麻辣鲜香"},
+      {"name": "糖醋排骨", "price": 58, "description": "外酥里嫩，酸甜可口"}
+    ],
+    "热菜": [
+      {"name": "麻婆豆腐", "price": 28},
+      {"name": "鱼香肉丝", "price": 38},
+      {"name": "回锅肉", "price": 48},
+      {"name": "水煮鱼", "price": 78}
+    ],
+    "凉菜": [
+      {"name": "拍黄瓜", "price": 12},
+      {"name": "凉拌木耳", "price": 18},
+      {"name": "口水鸡", "price": 32}
+    ],
+    "主食": [
+      {"name": "扬州炒饭", "price": 28},
+      {"name": "牛肉面", "price": 32},
+      {"name": "小笼包", "price": 22}
+    ],
+    "汤品": [
+      {"name": "西湖牛肉羹", "price": 28},
+      {"name": "紫菜蛋花汤", "price": 15}
+    ]
+  },
+  "business_hours": "10:00-22:00",
+  "phone": "010-12345678",
+  "address": "北京市朝阳区xxx路xxx号",
+  "features": [
+    "免费WiFi",
+    "包间可预订",
+    "支持外卖",
+    "停车方便"
+  ],
+  "promotions": {
+    "current": "周一至周五午餐 8.8 折优惠",
+    "upcoming": "端午节期间消费满 200 送粽子礼盒"
+  }
+}
