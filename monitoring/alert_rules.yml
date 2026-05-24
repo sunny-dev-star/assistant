@@ -1,47 +1,38 @@
 groups:
   - name: agent_alerts
     rules:
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(agent_chat_latency_seconds_bucket[5m])) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "响应时间过慢：P95 > 3s"
+          description: "当前 P95 延迟 {{ $value }}s，阈值 3s"
+
       - alert: HighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High error rate detected"
-          description: "Error rate is above 5% for more than 2 minutes"
-
-      - alert: HighResponseTime
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 3
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High response time"
-          description: "95th percentile response time is above 3 seconds"
-
-      - alert: ServiceDown
-        expr: up{job="agent-engine"} == 0
+        expr: rate(agent_chat_request_errors_total[5m]) / rate(agent_chat_requests_total[5m]) > 0.05
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "Agent Engine is down"
-          description: "Agent Engine service has been down for more than 1 minute"
+          summary: "错误率超过 5%"
+          description: "当前错误率 {{ $value | humanizePercentage }}"
 
-      - alert: HighTokenUsage
-        expr: increase(tokens_used_total[1h]) > 100000
+      - alert: TenantQuotaWarning
+        expr: agent_tenant_quota_usage_ratio > 0.85
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "High token usage"
-          description: "Token usage is above 100K in the last hour"
+          summary: "租户配额使用超过 85%：{{ $labels.tenant_id }}"
+          description: "租户 {{ $labels.tenant_id }} 配额使用率 {{ $value }}"
 
-      - alert: DiskSpaceLow
-        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
-        for: 5m
+      - alert: NoChatActivity
+        expr: increase(agent_chat_requests_total[1h]) == 0
+        for: 30m
         labels:
-          severity: critical
+          severity: info
         annotations:
-          summary: "Disk space low"
-          description: "Disk space is below 10%"
+          summary: "过去30分钟无对话活动"
+          description: "服务可能异常或无流量"

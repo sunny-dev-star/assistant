@@ -144,6 +144,26 @@ async def root():
     }
 
 
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+    from starlette.responses import Response as StarletteResponse
+
+    # Update app info
+    try:
+        from .infrastructure.metrics import app_info
+        app_info.info({"version": "5.0.0", "service": "assistant-api"})
+    except Exception:
+        pass
+
+    return StarletteResponse(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     import logging
