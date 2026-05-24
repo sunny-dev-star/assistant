@@ -19,7 +19,7 @@ from .domain.services.conversation_context_service import ConversationContextSer
 from .app.services.assistant_chat_app_service import AssistantChatAppService
 from .infrastructure.middleware.tenant_auth import TenantAuthMiddleware
 
-from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat
+from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat, billing
 
 
 @asynccontextmanager
@@ -130,6 +130,7 @@ app.include_router(skills.router, prefix="/v1", tags=["Skills"])
 app.include_router(tenant.router, prefix="/v1/admin", tags=["Tenant Admin"])
 app.include_router(ecommerce.router, prefix="/v1", tags=["Ecommerce"])
 app.include_router(wechat.router, prefix="/webhook", tags=["WeChat Webhook"])
+app.include_router(billing.router, prefix="/v1/admin", tags=["Billing & Usage"])
 
 
 @app.get("/")

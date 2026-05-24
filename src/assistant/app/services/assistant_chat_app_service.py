@@ -179,6 +179,29 @@ class AssistantChatAppService:
                     reply_content = msg.content
                     break
 
+            # --- Record API usage for billing ---
+            try:
+                from ...infrastructure.persistence.database import async_session_factory
+                from ...infrastructure.persistence.models import ApiUsageModel
+                import uuid
+                async with async_session_factory() as session:
+                    usage = ApiUsageModel(
+                        id=f"usage_{uuid.uuid4().hex[:12]}",
+                        tenant_id=context.tenant_id,
+                        conversation_id=context.session_id,
+                        model=context.llm_config.model,
+                        prompt_tokens=0,  # Aggregate from LLM responses
+                        completion_tokens=0,
+                        total_tokens=total_tokens,
+                        cost_usd=int(total_cost * 1_000_000),  # micro-dollars
+                        skill_name=skill_used,
+                        channel=str(context.channel),
+                    )
+                    session.add(usage)
+                    await session.commit()
+            except Exception as e:
+                logger.debug(f"Usage recording skipped: {e}")
+
             return {
                 "session_id": context.session_id,
                 "reply": reply_content,
