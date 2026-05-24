@@ -6,8 +6,10 @@ import hashlib
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 import logging
+
+from .....domain.ports.channel_port import IChannelAdapter, InboundMessage, OutboundMessage
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ class WechatMessage:
     format: str = ""
 
 
-class WechatAdapter:
+class WechatAdapter(IChannelAdapter):
     """WeChat Official Account message adapter"""
 
     def __init__(self, token: str, app_id: str = "", app_secret: str = "", encoding_aes_key: str = ""):
@@ -49,6 +51,49 @@ class WechatAdapter:
             app_secret=wechat_cfg.get("app_secret", ""),
             encoding_aes_key=wechat_cfg.get("encoding_aes_key", ""),
         )
+
+
+    # ==========================================
+    # IChannelAdapter interface implementation
+    # ==========================================
+
+    async def verify(self, request) -> bool:
+        """IChannelAdapter.verify — verify WeChat signature"""
+        from fastapi import Request
+        if isinstance(request, Request):
+            sig = request.query_params.get("signature", "")
+            ts = request.query_params.get("timestamp", "")
+            nonce = request.query_params.get("nonce", "")
+            return self.verify_signature(sig, ts, nonce)
+        return False
+
+    async def parse(self, request) -> InboundMessage:
+        """IChannelAdapter.parse — parse WeChat XML to InboundMessage"""
+        from fastapi import Request
+        if isinstance(request, Request):
+            body = await request.body()
+            msg = self.parse_message(body)
+            tenant_id = request.path_params.get("tenant_id", "")
+            return InboundMessage(
+                message_id=msg.msg_id,
+                channel="wechat",
+                tenant_id=tenant_id,
+                user_id=msg.from_user,
+                session_id=f"wx_{msg.from_user}_{tenant_id}",
+                content=msg.content or msg.recognize or "",
+                content_type=msg.msg_type,
+                raw=msg,
+            )
+        raise ValueError("Expected FastAPI Request")
+
+    async def render(self, msg: OutboundMessage, context: dict) -> str:
+        """IChannelAdapter.render — render OutboundMessage to WeChat XML"""
+        from_user = context.get("from_user", "")
+        to_user = context.get("to_user", "")
+        if msg.content_type == "rich" and msg.rich_content:
+            articles = msg.rich_content.get("articles", [])
+            return self.build_news_reply(from_user, to_user, articles)
+        return self.build_text_reply(from_user, to_user, msg.content)
 
     def verify_signature(self, signature: str, timestamp: str, nonce: str) -> bool:
         """Verify WeChat server signature"""

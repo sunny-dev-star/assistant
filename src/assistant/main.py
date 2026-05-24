@@ -16,7 +16,7 @@ from .infrastructure.persistence.memory_message_repository import MemoryMessageR
 from .infrastructure.skill_loader import SkillLoader
 from .infrastructure.mcp.client import MCPClient
 from .domain.services.conversation_context_service import ConversationContextService
-from .app.services.assistant_chat_app_service import AssistantChatAppService
+from .app.services.assistant_chat_app_service import ConversationAppService
 from .infrastructure.middleware.tenant_auth import TenantAuthMiddleware
 
 from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat, billing
@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
     tool_gateway = ToolGatewayAdapter(skill_loader, mcp_client)
 
     # 6. App Service
-    assistant_chat_app_service = AssistantChatAppService(
+    assistant_chat_app_service = ConversationAppService(
         llm_port=llm_adapter,
         tool_gateway=tool_gateway,
         message_repo=message_repo,

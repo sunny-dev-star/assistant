@@ -1,8 +1,21 @@
 -- Agent Framework Database Schema
 -- Auto-loaded by docker-entrypoint-initdb.d
+-- Requires: pgvector/pgvector:pg15 image
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "vector";
+
+-- ============================================
+-- Auto-update updated_at trigger function
+-- ============================================
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ============================================
 -- Tenants
@@ -28,6 +41,10 @@ CREATE TABLE IF NOT EXISTS tenants (
 CREATE INDEX IF NOT EXISTS idx_tenants_api_key ON tenants(api_key);
 CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
 
+CREATE TRIGGER trg_tenants_updated_at
+    BEFORE UPDATE ON tenants
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
 -- ============================================
 -- Conversations
 -- ============================================
@@ -37,7 +54,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     user_id     VARCHAR(50) NOT NULL,
     channel     VARCHAR(20) DEFAULT 'web',
     status      VARCHAR(20) DEFAULT 'active',
-    metadata    JSONB DEFAULT '{}',
+    extra_data  JSONB DEFAULT '{}',
     created_at  TIMESTAMP DEFAULT NOW(),
     updated_at  TIMESTAMP DEFAULT NOW(),
     closed_at   TIMESTAMP
@@ -46,6 +63,10 @@ CREATE TABLE IF NOT EXISTS conversations (
 CREATE INDEX IF NOT EXISTS idx_conversations_tenant ON conversations(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
+
+CREATE TRIGGER trg_conversations_updated_at
+    BEFORE UPDATE ON conversations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ============================================
 -- Messages
@@ -62,7 +83,7 @@ CREATE TABLE IF NOT EXISTS messages (
     tool_call_id    VARCHAR(100),
     tokens_used     INTEGER DEFAULT 0,
     skill_used      VARCHAR(50),
-    metadata        JSONB DEFAULT '{}',
+    meta_data       JSONB DEFAULT '{}',
     created_at      TIMESTAMP DEFAULT NOW()
 );
 
@@ -91,6 +112,22 @@ CREATE INDEX IF NOT EXISTS idx_api_usage_tenant ON api_usage(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_api_usage_created ON api_usage(created_at);
 
 -- ============================================
+-- Knowledge Embeddings (vector search for RAG)
+-- ============================================
+CREATE TABLE IF NOT EXISTS knowledge_embeddings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id VARCHAR(50) NOT NULL REFERENCES tenants(id),
+    content TEXT NOT NULL,
+    embedding vector(1536),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_tenant ON knowledge_embeddings(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_embedding ON knowledge_embeddings
+    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- ============================================
 -- Seed: default tenant for development
 -- ============================================
 INSERT INTO tenants (id, name, api_key, plan, status, quota_limit, config)
@@ -101,5 +138,5 @@ VALUES (
     'professional',
     'active',
     1000000,
-    '{"window_size": 10, "default_model": "deepseek/deepseek-chat", "enabled_skills": ["weather_query", "express_query"]}'
+    '{"window_size": 10, "default_model": "deepseek/deepseek-chat", "enabled_skills": ["weather_query", "express_query", "elder_care"]}'
 ) ON CONFLICT (id) DO NOTHING;

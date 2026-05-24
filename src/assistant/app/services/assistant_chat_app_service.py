@@ -17,7 +17,7 @@ from ...domain.repositories.message_repository import IMessageRepository
 logger = logging.getLogger(__name__)
 
 
-class AssistantChatAppService:
+class ConversationAppService:
     """处理通用对话流程的应用服务"""
 
     def __init__(
