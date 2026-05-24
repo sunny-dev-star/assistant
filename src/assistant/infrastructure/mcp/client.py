@@ -145,3 +145,9 @@ class MCPClient:
     def tool_count(self): return len(self._tools)
     @property
     def server_count(self): return len(self._servers)
+
+    async def cleanup(self):
+        """Cleanup MCP connections"""
+        self._servers.clear()
+        self._tools.clear()
+        self._tool_to_server.clear()

@@ -86,27 +86,33 @@ class SkillLoader:
         return tools
 
     def _yaml(self, text: str) -> dict:
-        result = {}
-        for line in text.split("\n"):
-            s = line.strip()
-            if not s or s.startswith("#"):
-                continue
-            m = re.match(r'^(\w+):\s*(.*)', s)
-            if not m:
-                continue
-            k, v = m.group(1), m.group(2).strip()
-            if v.startswith("[") or v.startswith("{"):
-                try:
-                    result[k] = json.loads(v)
-                except:
-                    result[k] = v
-            elif v.startswith('"') and v.endswith('"'):
-                result[k] = v[1:-1]
-            elif v.startswith("'") and v.endswith("'"):
-                result[k] = v[1:-1]
-            elif v:
-                result[k] = int(v) if v.isdigit() else v
-        return result
+        """Parse YAML frontmatter with full nested structure support"""
+        try:
+            import yaml
+            return yaml.safe_load(text) or {}
+        except Exception:
+            # Fallback to simple parser
+            result = {}
+            for line in text.split("\n"):
+                s = line.strip()
+                if not s or s.startswith("#"):
+                    continue
+                m = re.match(r'^(\w+):\s*(.*)', s)
+                if not m:
+                    continue
+                k, v = m.group(1), m.group(2).strip()
+                if v.startswith("[") or v.startswith("{"):
+                    try:
+                        result[k] = json.loads(v)
+                    except:
+                        result[k] = v
+                elif v.startswith('"') and v.endswith('"'):
+                    result[k] = v[1:-1]
+                elif v.startswith("'") and v.endswith("'"):
+                    result[k] = v[1:-1]
+                elif v:
+                    result[k] = int(v) if v.isdigit() else v
+            return result
 
     def _scan(self, d: Path, exts: tuple) -> list:
         if not d.exists():

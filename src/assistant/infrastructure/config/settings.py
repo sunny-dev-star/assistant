@@ -1,53 +1,55 @@
 """
-配置管理
+Configuration management
 """
+from pathlib import Path
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 
 class Settings(BaseSettings):
-    """应用配置"""
-    
-    # 应用信息
+    """Application settings"""
+
+    # App
     APP_NAME: str = "Assistant"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "5.0.0"
     ENV: str = "development"
-    DEBUG: bool = False
-    
-    # 数据库
-    DATABASE_URL: str = "postgresql+asyncpg://agent:agent123@localhost:5432/agent_db"
+    DEBUG: bool = True
+
+    # Database - SQLite for dev, PostgreSQL for production
+    DATABASE_URL: str = "sqlite+aiosqlite:///./assistant.db"
     DATABASE_POOL_SIZE: int = 10
-    
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
-    
-    # DeepSeek LLM 配置
+
+    # DeepSeek LLM
     DEEPSEEK_API_URL: str = "https://api.deepseek.com/v1"
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_MODEL: str = "deepseek-chat"
     DEEPSEEK_MAX_TOKENS: int = 2048
     DEEPSEEK_TEMPERATURE: float = 0.7
-    
-    # Dify 配置（保留，后续可选）
+
+    # Dify (optional)
     DIFY_API_URL: str = "http://localhost:5001"
     DIFY_API_KEY: str = ""
-    
-    # MCP 配置
-    MCP_SERVERS: str = ""  # JSON: [{"name":"xxx","command":"python3","args":["server.py"]}]
+
+    # MCP
+    MCP_SERVERS: str = ""
     MCP_ENABLED: bool = False
-    
-    # 安全
+
+    # Auth
+    AUTH_ENABLED: bool = False
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
-    
-    # 监控
+
+    # Monitoring
     PROMETHEUS_ENABLED: bool = True
-    
-    # 日志
+
+    # Logging
     LOG_LEVEL: str = "INFO"
-    
+
     class Config:
-        env_file = ".env"
+        # Look for .env in project root (parent of src/)
+        env_file = str(Path(__file__).resolve().parents[4] / ".env")
         env_file_encoding = "utf-8"
 
 

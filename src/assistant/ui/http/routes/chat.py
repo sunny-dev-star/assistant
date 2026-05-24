@@ -1,5 +1,5 @@
 """
-对话路由
+Chat router - unified endpoint with tenant authentication
 """
 import uuid
 from fastapi import APIRouter, Request
@@ -8,32 +8,27 @@ from typing import Optional, Dict, Any
 
 from ....domain.models.context import TenantContext, LLMConfig
 from ....domain.value_objects.channel import Channel
+from ....infrastructure.config.settings import settings
 
 router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    """对话请求"""
+    """Chat request"""
     message: str
     session_id: Optional[str] = None
-    user_id: Optional[str] = None
+    user_id: str = "anonymous"
     user_name: Optional[str] = None
     channel: str = "web"
-    tenant_id: str = "default_tenant"
     metadata: Optional[Dict[str, Any]] = None
 
 
 class ChatResponse(BaseModel):
-    """对话响应"""
+    """Chat response"""
     session_id: str
     reply: str
     tokens_used: int = 0
     cost_usd: float = 0.0
-
-
-def get_app_service(request: Request):
-    """从 app.state 获取 AssistantChatAppService 实例"""
-    return request.app.state.assistant_chat_app_service
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -42,36 +37,43 @@ async def chat(
     chat_req: ChatRequest
 ):
     """
-    发起对话 (LiteLLM 驱动)
+    Unified chat endpoint.
+    Tenant is injected by TenantAuthMiddleware from Bearer token (or default in dev mode).
     """
-    app_service = get_app_service(request)
-    
-    # 组装 TenantContext (实际场景中应从 Token 或网关 Header 提取)
+    app_service = request.app.state.assistant_chat_app_service
+    tenant = request.state.tenant
+
     session_id = chat_req.session_id or f"sess_{uuid.uuid4().hex[:12]}"
-    user_id = chat_req.user_id or f"user_{uuid.uuid4().hex[:8]}"
-    
-    # TODO: 实际应从租户配置中读取大模型配置
+    user_id = chat_req.user_id
+
+    # Build LLM config from tenant settings + global API key
+    default_model = tenant.config.get("default_model", "deepseek/deepseek-chat")
     llm_config = LLMConfig(
         provider="openai_compat",
-        model="deepseek/deepseek-chat"
-        # api_key="从配置或环境变量加载"
+        model=default_model,
+        api_key=settings.DEEPSEEK_API_KEY or None,
+        api_base=settings.DEEPSEEK_API_URL if settings.DEEPSEEK_API_URL else None,
     )
-    
+
     context = TenantContext(
-        tenant_id=chat_req.tenant_id,
+        tenant_id=tenant.id,
         user_id=user_id,
         channel=Channel(chat_req.channel),
         session_id=session_id,
         llm_config=llm_config,
-        metadata=chat_req.metadata or {}
+        allowed_skills=tenant.config.get("enabled_skills", []),
+        metadata={
+            **(chat_req.metadata or {}),
+            "window_size": tenant.config.get("window_size", 10),
+        }
     )
-    
+
     result = await app_service.execute(
         context=context,
         user_message_content=chat_req.message,
         user_name=chat_req.user_name
     )
-    
+
     return ChatResponse(**result)
 
 
@@ -81,12 +83,10 @@ async def get_chat_history(
     session_id: str,
     limit: int = 50
 ):
-    """
-    获取对话历史
-    """
-    app_service = get_app_service(request)
+    """Get chat history for a session"""
+    app_service = request.app.state.assistant_chat_app_service
     messages = await app_service.message_repo.list_by_conversation(session_id, limit=limit)
-    
+
     return {
         "session_id": session_id,
         "messages": [m.to_dict() for m in messages]
