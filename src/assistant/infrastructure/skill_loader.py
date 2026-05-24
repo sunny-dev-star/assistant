@@ -128,6 +128,17 @@ class SkillLoader:
 
     # ===== 公共 API =====
 
+
+    def get_all_tools_with_skill_tag(self) -> list:
+        """Return all tools with _skill_name tag for tenant filtering"""
+        result = []
+        for skill_name, skill in self.skills.items():
+            for t in skill["tools"]:
+                tagged = dict(t)
+                tagged["_skill_name"] = skill_name
+                result.append(tagged)
+        return result
+
     def get_all_tools(self) -> list:
         return [t for s in self.skills.values() for t in s["tools"]]
 
