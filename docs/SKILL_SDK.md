@@ -1,309 +1,142 @@
-# Agent Framework - 技能开发 SDK 文档
+# Agent Framework - 技能开发 SDK 文档 (Claude Skill 规范)
 
 ## 概述
 
-技能（Skill）是 Agent Framework 的核心扩展单元。每个技能封装了特定行业或场景的能力，包含提示词、工具函数和知识库。
+技能（Skill）是 Agent Framework 的核心扩展单元。本框架全面采用 **Claude Skill 规范 (Progressive Disclosure)**，不再使用旧版的 `skill.json` 和 Python 面向对象类封装。
+每个技能封装了特定行业或场景的能力，通过声明式的 Markdown 和原生脚本组成，支持热加载。
+
+## 目录结构
+
+符合 Claude Skill 规范的技能包结构如下：
+
+```text
+skills/my_skill/
+├── SKILL.md            # 核心定义（必填）：包含 Frontmatter 工具 Schema 和技能说明
+├── references/         # 参考知识（可选）：Markdown 格式的业务规则、系统提示词片段
+│   └── rules.md
+├── scripts/            # 可执行工具（可选）：具体的 Python 或 Bash 脚本
+│   └── query_data.py
+└── assets/             # 媒体资源（可选）：图片、多媒体文件
+    └── logo.png
+```
 
 ## 快速开始
 
 ### 1. 创建技能目录
 
 ```bash
-mkdir skills/my_skill
-cd skills/my_skill
+mkdir -p skills/catering_service/{references,scripts,assets}
+cd skills/catering_service
 ```
 
-### 2. 编写 skill.json
+### 2. 编写 SKILL.md
 
-```json
-{
-  "id": "catering_service",
-  "name": "餐饮服务",
-  "version": "1.0.0",
-  "description": "餐饮行业的智能客服和订座服务",
-  "author": "your_name",
-  "entry": "main.py",
-  "config": {
-    "llm_model": "deepseek-chat",
-    "temperature": 0.7,
-    "max_context": 10
-  },
-  "tools": [
-    "query_menu",
-    "make_reservation",
-    "reply_review"
-  ],
-  "dependencies": [],
-  "permissions": [
-    "read:tenant_data",
-    "write:conversation"
-  ]
-}
+`SKILL.md` 是技能的唯一核心入口，采用 YAML Frontmatter 定义元数据与工具 Schema。
+
+```markdown
+---
+name: catering_service
+description: 餐饮行业的智能客服和订座服务
+version: 1.0.0
+author: your_name
+tools:
+  - type: function
+    function:
+      name: query_menu
+      description: 查询菜单信息和价格
+      parameters:
+        type: object
+        properties:
+          dish_type:
+            type: string
+            description: 菜品类别，如“招牌菜”、“主食”
+        required: []
+  - type: function
+    function:
+      name: make_reservation
+      description: 帮助客户预约订座
+      parameters:
+        type: object
+        properties:
+          date:
+            type: string
+            description: 预约日期，如 "2026-05-18"
+          time:
+            type: string
+            description: 预约时间，如 "18:30"
+          people:
+            type: integer
+            description: 就餐人数
+          name:
+            type: string
+            description: 客户姓名
+          phone:
+            type: string
+            description: 客户电话
+        required: [date, time, people, name, phone]
+---
+
+# 餐饮服务技能
+
+这是餐饮客服的专属能力包，它提供了菜单查询、预约订座等核心能力。系统会自动将 `references/` 下的 Markdown 知识拼接进 System Prompt 中。
 ```
 
-### 3. 编写主入口 main.py
+### 3. 编写参考知识 (references)
 
-```python
-from agent_framework import Skill, Tool, Context
+在 `references/rules.md` 中编写该技能的业务规则或背景知识：
 
-class CateringService(Skill):
-    """餐饮服务技能"""
-    
-    def __init__(self, config):
-        super().__init__(config)
-        self.load_prompts()
-        self.load_knowledge_base()
-    
-    @Tool(name="query_menu", description="查询菜单")
-    def query_menu(self, ctx: Context, dish_type: str = None):
-        """查询菜单信息"""
-        menu = self.knowledge_base.get("menu", {})
-        if dish_type:
-            return menu.get(dish_type, [])
-        return menu
-    
-    @Tool(name="make_reservation", description="预约订座")
-    def make_reservation(self, ctx: Context, date: str, time: str, people: int, name: str, phone: str):
-        """处理订座请求"""
-        # 调用外部系统或记录到数据库
-        reservation = {
-            "date": date,
-            "time": time,
-            "people": people,
-            "name": name,
-            "phone": phone,
-            "status": "confirmed"
-        }
-        # 保存到租户数据库
-        ctx.db.reservations.insert(reservation)
-        return f"已为您预约 {date} {time}，{people}人，姓名：{name}"
-    
-    @Tool(name="reply_review", description="回复评价")
-    def reply_review(self, ctx: Context, review_content: str, rating: int):
-        """自动生成评价回复"""
-        if rating >= 4:
-            return "感谢您的认可！我们会继续努力，期待您的再次光临！"
-        else:
-            return "非常抱歉给您带来不好的体验，我们会认真改进。请您联系我们，我们愿意为您提供补偿。"
-    
-    def handle(self, ctx: Context, message: str):
-        """主处理函数"""
-        # 使用 LLM 理解意图
-        intent = self.classify_intent(message)
-        
-        if intent == "query_menu":
-            return self.query_menu(ctx)
-        elif intent == "reservation":
-            # 提取实体
-            entities = self.extract_entities(message)
-            return self.make_reservation(ctx, **entities)
-        elif intent == "review":
-            return self.reply_review(ctx, message, 5)
-        else:
-            # 使用通用对话
-            return self.chat(ctx, message)
-    
-    def classify_intent(self, message: str) -> str:
-        """意图分类"""
-        # 使用 LLM 或规则匹配
-        keywords = {
-            "query_menu": ["菜单", "有什么菜", "推荐", "价格"],
-            "reservation": ["订座", "预约", "定位", "几个人"],
-            "review": ["评价", "点评", "反馈"]
-        }
-        for intent, words in keywords.items():
-            if any(w in message for w in words):
-                return intent
-        return "chat"
-```
-
-### 4. 编写提示词 prompts/system.txt
-
-```
-你是一位专业的餐饮客服助手，服务于 {restaurant_name}。
+```markdown
+# 餐饮服务规则
+你是一位专业的餐饮客服助手。
 
 你的职责：
 1. 回答客户关于菜单、价格、营业时间的问题
 2. 帮助客户预约订座
 3. 礼貌回复客户评价
-4. 推荐招牌菜和优惠活动
 
 规则：
 - 语气亲切、热情
 - 回答简洁，不超过 100 字
-- 不知道的问题不要编造，说"我帮您问一下"
-- 涉及退款/投诉时，立即转接人工
-
-当前时间：{current_time}
-餐厅信息：
-{restaurant_info}
+- 涉及退款/投诉时，请安抚客户情绪并记录
 ```
 
-### 5. 编写知识库 knowledge/faq.json
+### 4. 编写工具执行脚本 (scripts)
 
-```json
-{
-  "menu": {
-    "招牌菜": [
-      {"name": "红烧肉", "price": 68, "description": "秘制酱料，肥而不腻"},
-      {"name": "清蒸鲈鱼", "price": 88, "description": "新鲜活鱼，现点现做"}
-    ],
-    "主食": [
-      {"name": "扬州炒饭", "price": 28},
-      {"name": "牛肉面", "price": 32}
-    ]
-  },
-  "business_hours": "10:00-22:00",
-  "phone": "010-12345678",
-  "address": "北京市朝阳区xxx路xxx号"
-}
-```
-
-## 技能注册与加载
-
-### 自动发现
-
-框架启动时自动扫描 `skills/` 目录：
+在 `scripts/query_menu.py` 中编写原生工具实现。框架会自动将大模型的 tool_calls 映射执行：
 
 ```python
-# agent_framework/loader.py
-import os
+import sys
 import json
-from pathlib import Path
 
-class SkillLoader:
-    def __init__(self, skills_dir="skills"):
-        self.skills_dir = Path(skills_dir)
-        self.skills = {}
+def query_menu(dish_type=None):
+    menu = {
+        "招牌菜": [
+            {"name": "红烧肉", "price": 68, "description": "秘制酱料，肥而不腻"},
+            {"name": "清蒸鲈鱼", "price": 88, "description": "新鲜活鱼，现点现做"}
+        ],
+        "主食": [
+            {"name": "扬州炒饭", "price": 28},
+            {"name": "牛肉面", "price": 32}
+        ]
+    }
     
-    def load_all(self):
-        """加载所有技能"""
-        for skill_dir in self.skills_dir.iterdir():
-            if skill_dir.is_dir():
-                self.load_skill(skill_dir)
-    
-    def load_skill(self, skill_dir: Path):
-        """加载单个技能"""
-        config_file = skill_dir / "skill.json"
-        if not config_file.exists():
-            return
-        
-        with open(config_file) as f:
-            config = json.load(f)
-        
-        skill_id = config["id"]
-        entry_file = skill_dir / config["entry"]
-        
-        # 动态导入
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(skill_id, entry_file)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        
-        # 实例化技能
-        skill_class = getattr(module, config.get("class", "Skill"))
-        self.skills[skill_id] = skill_class(config)
-    
-    def reload_skill(self, skill_id: str):
-        """热重载技能"""
-        if skill_id in self.skills:
-            del self.skills[skill_id]
-        skill_dir = self.skills_dir / skill_id
-        self.load_skill(skill_dir)
-    
-    def get_skill(self, skill_id: str):
-        return self.skills.get(skill_id)
+    if dish_type and dish_type in menu:
+        return json.dumps(menu[dish_type], ensure_ascii=False)
+    return json.dumps(menu, ensure_ascii=False)
+
+if __name__ == "__main__":
+    # 解析来自框架的参数
+    args = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
+    result = query_menu(args.get("dish_type"))
+    print(result)
 ```
 
-### 手动注册
+## 技能加载机制
 
-```python
-from agent_framework import SkillRegistry
+系统启动时，`SkillLoader` 会扫描 `skills/` 目录，并按如下三级逐步加载：
 
-registry = SkillRegistry()
-registry.register("catering_service", CateringService)
-```
+1. **Level 1 (元数据)**：解析 `SKILL.md` 的 Frontmatter，提取工具列表与描述。
+2. **Level 2 (主体)**：提取 `SKILL.md` 的正文。
+3. **Level 3 (按需资源)**：当 LLM 需要执行工具时，动态加载 `scripts/` 中的代码；当构建 Prompt 时，加载 `references/` 的知识片段。
 
-## 上下文对象 Context
-
-```python
-class Context:
-    """技能运行时的上下文"""
-    
-    def __init__(self, tenant_id: str, session_id: str, user_id: str):
-        self.tenant_id = tenant_id
-        self.session_id = session_id
-        self.user_id = user_id
-        self.db = TenantDatabase(tenant_id)  # 租户隔离的数据库
-        self.cache = RedisCache(tenant_id)   # 租户隔离的缓存
-        self.config = TenantConfig(tenant_id) # 租户配置
-    
-    def get_history(self, limit: int = 10):
-        """获取对话历史"""
-        return self.db.conversations.find(
-            {"session_id": self.session_id},
-            limit=limit
-        )
-    
-    def save_message(self, role: str, content: str):
-        """保存消息"""
-        self.db.conversations.insert({
-            "session_id": self.session_id,
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now()
-        })
-```
-
-## 工具装饰器
-
-```python
-from agent_framework import Tool
-
-class MySkill(Skill):
-    
-    @Tool(
-        name="send_sms",
-        description="发送短信通知",
-        parameters={
-            "phone": {"type": "string", "required": True},
-            "content": {"type": "string", "required": True}
-        }
-    )
-    def send_sms(self, ctx: Context, phone: str, content: str):
-        """发送短信"""
-        # 调用短信 API
-        result = sms_api.send(phone, content)
-        return {"success": result.success, "message_id": result.id}
-```
-
-## 调试技能
-
-```python
-# test_skill.py
-from agent_framework import TestRunner
-
-runner = TestRunner()
-runner.load_skill("catering_service")
-
-# 运行测试用例
-test_cases = [
-    {"input": "你们有什么好吃的？", "expected_intent": "query_menu"},
-    {"input": "我想订座，今晚7点，4个人", "expected_intent": "reservation"},
-]
-
-for case in test_cases:
-    result = runner.run(case["input"])
-    print(f"输入: {case['input']}")
-    print(f"意图: {result.intent}")
-    print(f"回复: {result.reply}")
-    print("---")
-```
-
-## 最佳实践
-
-1. **保持技能单一职责**：一个技能解决一个行业的一个核心问题
-2. **配置化**：硬编码越少越好，通过 config 和知识库动态调整
-3. **错误处理**：所有工具函数都要处理异常情况
-4. **日志记录**：关键操作要记录日志，便于排查问题
-5. **测试覆盖**：每个技能至少要有 5 个测试用例
+你可以在运行中通过上传新的符合规范的目录，或在后台触发热重载。

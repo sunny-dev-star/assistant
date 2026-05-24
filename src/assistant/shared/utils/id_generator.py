@@ -44,3 +44,8 @@ class IDGenerator:
         """生成随机字符串"""
         alphabet = string.ascii_letters + string.digits
         return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+def generate_id(prefix: str = "id") -> str:
+    """生成带前缀的 ID"""
+    return f"{prefix}_{uuid.uuid4().hex[:12]}"

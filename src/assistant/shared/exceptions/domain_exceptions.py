@@ -46,3 +46,13 @@ class AuthenticationException(DomainException):
 class AuthorizationException(DomainException):
     """授权失败"""
     pass
+
+
+class NotFoundError(DomainException):
+    """资源不存在"""
+    pass
+
+
+class ValidationError(DomainException):
+    """验证错误"""
+    pass

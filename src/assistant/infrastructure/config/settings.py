@@ -21,9 +21,20 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     
-    # Dify 配置
+    # DeepSeek LLM 配置
+    DEEPSEEK_API_URL: str = "https://api.deepseek.com/v1"
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_MAX_TOKENS: int = 2048
+    DEEPSEEK_TEMPERATURE: float = 0.7
+    
+    # Dify 配置（保留，后续可选）
     DIFY_API_URL: str = "http://localhost:5001"
     DIFY_API_KEY: str = ""
+    
+    # MCP 配置
+    MCP_SERVERS: str = ""  # JSON: [{"name":"xxx","command":"python3","args":["server.py"]}]
+    MCP_ENABLED: bool = False
     
     # 安全
     SECRET_KEY: str = "your-secret-key-change-in-production"

@@ -17,9 +17,9 @@
 ├── src/                    # 源代码
 │   ├── assistant/          # 核心应用
 │   │   ├── domain/         # 领域层
-│   │   ├── application/    # 应用层
+│   │   ├── application/    # 应用层 (TODO: rename to app)
 │   │   ├── infrastructure/ # 基础设施层
-│   │   ├── interfaces/     # 接口层
+│   │   ├── interfaces/     # 接口层 (TODO: rename to ui)
 │   │   └── shared/         # 共享层
 │   ├── requirements.txt    # Python 依赖
 │   └── Dockerfile          # 容器镜像
@@ -44,7 +44,7 @@ docker-compose up -d
 
 # 3. 运行应用
 cd src
-uvicorn assistant.interfaces.http.main:app --reload
+uvicorn assistant.main:app --reload
 `
 
 ## 文档

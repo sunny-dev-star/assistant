@@ -2,22 +2,23 @@
 
 ## 文档信息
 - **项目名称**: Agent Framework（智能体框架）
-- **版本**: v1.0
-- **日期**: 2026-05-16
-- **状态**: 设计中
+- **版本**: v2.0
+- **日期**: 2026-05-17
+- **状态**: 设计中（去 Dify 架构演进版）
 
 ---
 
 ## 1. 设计目标
 
 ### 1.1 核心定位
-基于 **Dify 开源框架** 二次开发，面向中小企业提供**行业定制智能体**服务。
+面向中小企业提供**行业定制智能体**服务的多租户 SaaS 平台。
 
 ### 1.2 设计原则
-1. **不重复造轮子**：底层引擎用 Dify，专注做行业差异化
-2. **快速交付**：2-4 周完成一个行业方案
-3. **低运维成本**：Docker 一键部署，自动监控告警
-4. **可扩展**：技能插件化，支持 MCP 协议
+1. **纯自主引擎**：去中心化架构，彻底剥离 Dify 依赖，采用 `LiteLLM` 作为大模型网关协议统一层，核心业务流（上下文管理、工具循环）完全自主掌控。
+2. **多租户数据隔离**：强隔离机制，精细化管理租户与用户维度的模型选用与成本计费（Token 计算）。
+3. **领域驱动设计 (DDD)**：按 `ui`（表现层） -> `app`（应用层） -> `domain`（领域层） -> `infra`（基础设施层）解耦，提升业务复杂度管理。
+4. **低运维成本**：轻量级依赖，Docker 部署。
+5. **可扩展**：支持 MCP 协议接入，以及通过技能插件化实现行业定制。
 
 ---
 
@@ -29,7 +30,7 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                        客户端层                                   │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │  Web网页  │  │ 微信小程序 │  │  uni-app │  │  嵌入组件 │       │
+│  │  Web网页  │  │ 微信小程序 │  │   Taro   │  │  嵌入组件 │       │
 │  │          │  │          │  │  (iOS/安卓)│  │          │       │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │
 └───────┼─────────────┼─────────────┼─────────────┼───────────────┘
@@ -37,33 +38,38 @@
         └─────────────┴──────┬──────┴─────────────┘
                              │
 ┌────────────────────────────┼────────────────────────────────────┐
-│                      你的后端服务层                              │
+│                      FastAPI 服务集群 (DDD 分层)                │
 │  ┌─────────────────────────┴──────────────────────────────┐    │
 │  │              API Gateway (Nginx / Traefik)              │    │
 │  │              认证 / 限流 / 路由 / SSL                    │    │
 │  └─────────────────────────┬──────────────────────────────┘    │
 │                            │                                     │
 │  ┌─────────────────────────┴──────────────────────────────┐    │
-│  │              客户管理面板 (Vue 3 + Element Plus)         │    │
-│  │  • 租户管理  • 对话记录  • 数据统计  • 计费系统          │    │
+│  │     UI层 (表现层)                                       │    │
+│  │     REST API、渠道Webhook（微信/钉钉）、管理后台接口          │    │
 │  └─────────────────────────┬──────────────────────────────┘    │
 │                            │                                     │
 │  ┌─────────────────────────┴──────────────────────────────┐    │
-│  │              渠道适配器 (Channel Adapters)               │    │
-│  │  • 微信适配器  • 飞书适配器  • 钉钉适配器  • WebSocket   │    │
+│  │     App层 (应用层 - AppServices)                        │    │
+│  │     AssistantChatAppService、EcommerceChatAppService    │    │
 │  └─────────────────────────┬──────────────────────────────┘    │
-└────────────────────────────┼────────────────────────────────────┘
-                             │
-┌────────────────────────────┼────────────────────────────────────┐
-│                      Dify 引擎层                                │
+│                            │                                     │
 │  ┌─────────────────────────┴──────────────────────────────┐    │
-│  │              Dify Self-Hosted (Docker)                  │    │
-│  │  • 工作流编排  • 知识库  • LLM 路由  • 对话管理          │    │
+│  │     Domain层 (领域层)                                   │    │
+│  │     Entities (Message, Tenant)                          │    │
+│  │     Domain Services (ConversationContextService)        │    │
+│  │     Outbound Ports (ILLMChatPort, IToolGateway)         │    │
+│  └─────────────────────────┬──────────────────────────────┘    │
+│                            │                                     │
+│  ┌─────────────────────────┴──────────────────────────────┐    │
+│  │     Infra层 (基础设施层)                                │    │
+│  │     LiteLLM Adapter (大模型网关路由)                      │    │
+│  │     PostgreSQL Repository, Skill/MCP Executor           │    │
 │  └─────────────────────────┬──────────────────────────────┘    │
 └────────────────────────────┼────────────────────────────────────┘
                              │
 ┌────────────────────────────┼────────────────────────────────────┐
-│                      基础设施层                                  │
+│                      基础设施环境                                │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
 │  │PostgreSQL│  │  Redis   │  │  MinIO   │  │  Nginx   │       │
 │  │          │  │          │  │          │  │          │       │
@@ -75,15 +81,15 @@
 
 | 层级 | 组件 | 职责 | 技术选型 |
 |------|------|------|----------|
-| **客户端层** | Web/小程序/APP | 用户交互界面 | Vue 3 / uni-app / 微信小程序 |
-| **后端服务层** | API Gateway | 统一入口、认证、限流 | Nginx / Traefik |
-| | 客户管理面板 | 租户管理、数据统计、计费 | Vue 3 + Element Plus |
-| | 渠道适配器 | 微信/飞书/钉钉消息转换 | Python / Node.js |
-| **引擎层** | Dify | LLM 编排、知识库、对话管理 | Dify Self-Hosted |
-| **基础设施层** | PostgreSQL | 业务数据存储 | PostgreSQL 15 |
-| | Redis | 缓存、会话、队列 | Redis 7 |
-| | MinIO | 文件存储 | MinIO |
-| | Nginx | 反向代理、SSL | Nginx |
+| **客户端层** | Web/小程序/APP | 用户交互界面 | React / Taro / 微信小程序 |
+| **API网关** | API Gateway | 统一入口、认证、限流 | Nginx / Traefik |
+| **UI 层** | HTTP 路由 | 解析参数，身份鉴权，组装 `TenantContext`，返回 JSON | FastAPI |
+| **App 层** | AppServices | 业务场景编排，依赖领域对象和抽象端口 | Python |
+| **Domain 层** | Domain Services | 核心业务规则（会话历史截断、计费抽象） | Python |
+| **Infra 层** | LiteLLM Adapter | 统一不同 LLM 厂商的调用协议、计算 Token 成本 | LiteLLM |
+| | PostgreSQL | 业务及对话数据持久化 | PostgreSQL 15 |
+| | Redis | 缓存、限流 | Redis 7 |
+| | MinIO | 附件/图片对象存储 | MinIO |
 
 ---
 
@@ -133,7 +139,7 @@ Tenant Portal
 
 #### 技术设计
 
-- **前端**: Vue 3 + Element Plus + ECharts（图表）
+- **前端**: React + Ant Design + ECharts（图表）
 - **后端 API**: FastAPI（Python）
 - **数据库**: PostgreSQL（租户隔离）
 - **部署**: Docker + Nginx
@@ -147,10 +153,10 @@ Tenant Portal
 每个渠道一个适配器，统一消息格式：
 
 ```
-微信消息 ──→ 微信适配器 ──→ 统一消息格式 ──→ Dify API
-飞书消息 ──→ 飞书适配器 ──→ 统一消息格式 ──→ Dify API
-钉钉消息 ──→ 钉钉适配器 ──→ 统一消息格式 ──→ Dify API
-Web消息 ───→ Web适配器 ───→ 统一消息格式 ──→ Dify API
+微信消息 ──→ 微信适配器 ──→ UI 层 (API)
+飞书消息 ──→ 飞书适配器 ──→ UI 层 (API)
+钉钉消息 ──→ 钉钉适配器 ──→ UI 层 (API)
+Web消息 ───→ Web适配器 ───→ UI 层 (API)
 ```
 
 #### 统一消息格式
@@ -271,15 +277,16 @@ async def wechat_webhook(tenant_id: str, request: Request):
     # 处理消息
     msg = await adapter.handle_message(request)
     
-    # 转发到 Dify
-    reply = await forward_to_dify(msg)
+    # 交由对应的 AppService 编排
+    app_service = request.app.state.assistant_chat_app_service
+    reply = await app_service.execute(msg)
     
     # 返回微信 XML 格式
     return Response(
         content=adapter.build_reply(
             msg["metadata"]["openid"],
             msg["metadata"]["app_id"],
-            reply
+            reply.text
         ),
         media_type="application/xml"
     )
@@ -295,17 +302,13 @@ async def wechat_webhook(tenant_id: str, request: Request):
 
 ```
 Skill Package
-├── skill.json          # 技能元数据
-├── prompts/            # 提示词模板
-│   └── system.txt
-├── tools/              # 工具函数
-│   ├── __init__.py
-│   ├── menu_query.py
-│   └── reservation.py
-├── knowledge/          # 知识库
-│   └── faq.json
-└── tests/              # 测试用例
-    └── test_skill.py
+├── SKILL.md            # 技能唯一规范与定义文件（包含元数据与工具 Schema）
+├── references/         # 参考文档与参考知识 (Markdown)
+│   └── rules.md
+├── scripts/            # 工具执行脚本 (Python/Bash)
+│   └── execute.py
+└── assets/             # 媒体与资源文件 (可选)
+│   └── logo.png
 ```
 
 #### 技能注册表
@@ -313,11 +316,12 @@ Skill Package
 ```python
 # skill_registry.py
 from typing import Dict, List
-import json
 from pathlib import Path
+import yaml
+import re
 
 class SkillRegistry:
-    """技能注册中心"""
+    """技能注册中心 (Claude Skill 规范)"""
     
     def __init__(self, skills_dir: str = "skills"):
         self.skills_dir = Path(skills_dir)
@@ -325,21 +329,20 @@ class SkillRegistry:
         self.load_all()
     
     def load_all(self):
-        """加载所有技能"""
+        """加载所有符合 Claude Skill 规范的技能"""
         for skill_dir in self.skills_dir.iterdir():
-            if skill_dir.is_dir() and (skill_dir / "skill.json").exists():
-                with open(skill_dir / "skill.json") as f:
-                    self.skills[skill_dir.name] = json.load(f)
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                self._load_skill(skill_dir)
+                
+    def _load_skill(self, skill_dir: Path):
+        # 解析 SKILL.md 中的 Frontmatter 和 Tools 定义
+        pass
     
     def get_skill(self, skill_id: str) -> dict:
         return self.skills.get(skill_id)
     
     def list_skills(self) -> List[dict]:
         return list(self.skills.values())
-    
-    def get_tools(self, skill_id: str) -> List[dict]:
-        skill = self.get_skill(skill_id)
-        return skill.get("tools", []) if skill else []
 ```
 
 ---
@@ -351,7 +354,7 @@ class SkillRegistry:
 通过 MCP 协议连接外部工具和服务：
 
 ```
-Dify 工作流 ──→ MCP Client ──→ MCP Server ──→ 外部服务
+AppService 工作流 ──→ MCP Client ──→ MCP Server ──→ 外部服务
                 │               │
                 │               ├── Search Server (搜索引擎)
                 │               ├── Database Server (数据库查询)
@@ -586,17 +589,17 @@ version: '3.8'
 
 services:
   # Dify 服务（官方镜像）
-  dify-api:
-    image: langgenius/dify-api:latest
-    # ... Dify 官方配置
+  # dify-api:
+  #   image: langgenius/dify-api:latest
+  #   # ... Dify 官方配置
 
-  dify-web:
-    image: langgenius/dify-web:latest
-    # ... Dify 官方配置
+  # dify-web:
+  #   image: langgenius/dify-web:latest
+  #   # ... Dify 官方配置
 
-  dify-worker:
-    image: langgenius/dify-worker:latest
-    # ... Dify 官方配置
+  # dify-worker:
+  #   image: langgenius/dify-worker:latest
+  #   # ... Dify 官方配置
 
   # 你的后端服务
   agent-portal:
@@ -605,8 +608,7 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://agent:agent123@postgres:5432/agent_db
-      - DIFY_API_URL=http://dify-api:5001
-      - DIFY_API_KEY=${DIFY_API_KEY}
+      - LITELLM_API_KEY=${LITELLM_API_KEY}
 
   # 渠道适配器
   channel-adapter:
@@ -615,7 +617,6 @@ services:
       - "8001:8000"
     environment:
       - DATABASE_URL=postgresql://agent:agent123@postgres:5432/agent_db
-      - DIFY_API_URL=http://dify-api:5001
 
   # 数据库
   postgres:
@@ -721,14 +722,13 @@ docker-compose ps
 ### 9.2 技能扩展
 
 ```python
-# 新技能开发流程
+# 新技能开发流程 (Claude Skill 规范)
 1. 创建 skills/new_skill/ 目录
-2. 编写 skill.json 元数据
-3. 实现 tools/ 工具函数
-4. 编写 prompts/ 提示词
-5. 准备 knowledge/ 知识库
-6. 运行测试
-7. 热加载到系统
+2. 编写 SKILL.md 定义技能说明和工具 Schema
+3. 实现 scripts/ 工具执行脚本
+4. 准备 references/ 参考知识
+5. 准备 assets/ 媒体文件 (可选)
+6. 热加载到系统
 ```
 
 ---
@@ -737,7 +737,7 @@ docker-compose ps
 
 | 阶段 | 时间 | 目标 | 产出 |
 |------|------|------|------|
-| **Phase 1** | Week 1-2 | 部署 Dify + 基础后端 | 可运行的基础平台 |
+| **Phase 1** | Week 1-2 | 部署 LiteLLM + 基础后端 | 可运行的基础平台 |
 | **Phase 2** | Week 3-4 | 客户面板 + 微信适配器 | 可交付的 MVP |
 | **Phase 3** | Week 5-6 | 行业技能包 + 监控告警 | 第一个行业方案 |
 | **Phase 4** | Week 7-8 | 小程序/APP + 计费系统 | 完整产品 |
@@ -749,14 +749,15 @@ docker-compose ps
 
 | 层级 | 技术选型 | 版本 |
 |------|---------|------|
-| **前端** | Vue 3 | ^3.4 |
-| | Element Plus | ^2.5 |
+| **前端** | React | ^18.2 |
+| | Taro | ^3.6 |
+| | Ant Design | ^5.0 |
 | | ECharts | ^5.4 |
 | **后端** | Python | 3.11 |
 | | FastAPI | ^0.109 |
 | | SQLAlchemy | ^2.0 |
 | | Celery | ^5.3 |
-| **引擎** | Dify | latest |
+| **模型网关** | LiteLLM | latest |
 | **数据库** | PostgreSQL | 15 |
 | | Redis | 7 |
 | **消息队列** | Redis | 7 |
