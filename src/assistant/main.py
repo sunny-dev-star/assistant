@@ -19,7 +19,7 @@ from .domain.services.conversation_context_service import ConversationContextSer
 from .app.services.assistant_chat_app_service import ConversationAppService
 from .infrastructure.middleware.tenant_auth import TenantAuthMiddleware
 
-from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat, billing
+from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat, billing, outbound
 
 
 @asynccontextmanager
@@ -96,6 +96,17 @@ async def lifespan(app: FastAPI):
     app.state.skill_loader = skill_loader
     app.state.mcp_client = mcp_client
     app.state.llm_adapter = llm_adapter
+
+    # 7. Outbound scheduler
+    from .app.services.outbound_scheduler import OutboundScheduler
+    outbound_scheduler = OutboundScheduler()
+    outbound_scheduler.configure(app_service=assistant_chat_app_service)
+    outbound_scheduler.start()
+    app.state.outbound_scheduler = outbound_scheduler
+    if outbound_scheduler.job_count > 0:
+        print(f"[Init] Outbound: {outbound_scheduler.job_count} scheduled jobs")
+    else:
+        print("[Init] Outbound scheduler ready (no jobs scheduled)")
     app.state.use_db = use_db
 
     auth_status = "ON (Bearer token required)" if settings.AUTH_ENABLED else "OFF (dev mode, auto-tenant)"
@@ -104,6 +115,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # Cleanup
+    outbound_scheduler = getattr(app.state, 'outbound_scheduler', None)
+    if outbound_scheduler:
+        outbound_scheduler.stop()
     await mcp_client.cleanup()
 
 
@@ -131,6 +146,7 @@ app.include_router(tenant.router, prefix="/v1/admin", tags=["Tenant Admin"])
 app.include_router(ecommerce.router, prefix="/v1", tags=["Ecommerce"])
 app.include_router(wechat.router, prefix="/webhook", tags=["WeChat Webhook"])
 app.include_router(billing.router, prefix="/v1/admin", tags=["Billing & Usage"])
+app.include_router(outbound.router, prefix="/v1/admin", tags=["Outbound Scheduler"])
 
 
 @app.get("/")
