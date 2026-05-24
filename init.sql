@@ -140,3 +140,58 @@ VALUES (
     1000000,
     '{"window_size": 10, "default_model": "deepseek/deepseek-chat", "enabled_skills": ["weather_query", "express_query", "elder_care"]}'
 ) ON CONFLICT (id) DO NOTHING;
+-- Scheduled Tasks (persistent, multi-tenant)
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id VARCHAR(50) PRIMARY KEY,
+    tenant_id VARCHAR(50) NOT NULL REFERENCES tenants(id),
+    user_id VARCHAR(50) NOT NULL,
+    channel VARCHAR(20) NOT NULL DEFAULT 'wechat',
+    task_type VARCHAR(50) NOT NULL,
+    display_name TEXT,
+    cron_expr VARCHAR(100),
+    run_once_at TIMESTAMP,
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai',
+    execution_type VARCHAR(20) NOT NULL DEFAULT 'message',
+    message TEXT,
+    skill_name VARCHAR(50),
+    tool_name VARCHAR(50),
+    tool_args JSONB DEFAULT '{}',
+    steps JSONB DEFAULT '[]',
+    mission_prompt TEXT,
+    mission_skills JSONB DEFAULT '[]',
+    context_as_input BOOLEAN DEFAULT FALSE,
+    result_as_message BOOLEAN DEFAULT TRUE,
+    skill_disabled_action VARCHAR(20) DEFAULT 'notify_admin',
+    is_active BOOLEAN DEFAULT TRUE,
+    last_run_at TIMESTAMP,
+    last_result TEXT,
+    run_count INTEGER DEFAULT 0,
+    error_count INTEGER DEFAULT 0,
+    last_error TEXT,
+    next_run_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_next_run ON scheduled_tasks(next_run_at, is_active);
+CREATE INDEX IF NOT EXISTS idx_tasks_tenant ON scheduled_tasks(tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_active ON scheduled_tasks(is_active, cron_expr) WHERE is_active = TRUE;
+
+CREATE TRIGGER trg_tasks_updated_at
+    BEFORE UPDATE ON scheduled_tasks
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Task Execution Logs
+CREATE TABLE IF NOT EXISTS task_execution_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id VARCHAR(50) NOT NULL REFERENCES scheduled_tasks(id),
+    tenant_id VARCHAR(50) NOT NULL,
+    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at TIMESTAMP,
+    status VARCHAR(20) NOT NULL DEFAULT 'running',
+    result TEXT,
+    error_detail TEXT,
+    steps_log JSONB DEFAULT '[]'
+);
+
+CREATE INDEX IF NOT EXISTS idx_exec_logs_task ON task_execution_logs(task_id, started_at DESC);

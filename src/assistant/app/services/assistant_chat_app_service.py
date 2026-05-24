@@ -236,3 +236,88 @@ class ConversationAppService:
                 ).inc()
             except Exception:
                 pass
+
+    # ==========================================
+    # Scheduler integration methods
+    # ==========================================
+
+    async def invoke_tool_directly(
+        self,
+        tenant,
+        user_id: str,
+        channel: str,
+        skill_name: str,
+        tool_name: str,
+        tool_args: dict,
+    ) -> str:
+        """
+        Scheduler-only: bypass LLM, execute a specific tool directly.
+        """
+        from ...domain.models.context import TenantContext, LLMConfig
+        from ...domain.value_objects.channel import Channel
+
+        result = await self.tool_gateway.call_tool(
+            context=None,  # No conversation context for scheduler
+            tool_name=tool_name,
+            args=tool_args,
+        )
+        return result
+
+    async def run_agent_mission(
+        self,
+        tenant,
+        user_id: str,
+        channel: str,
+        mission_prompt: str,
+        allowed_skills: list,
+    ) -> str:
+        """
+        Scheduler-only: run an agent loop with restricted skill set.
+        """
+        from ...domain.models.context import TenantContext, LLMConfig
+        from ...domain.value_objects.channel import Channel
+
+        llm_config = LLMConfig(
+            provider="openai_compat",
+            model=tenant.config.get("default_model", "deepseek/deepseek-chat"),
+            api_key=None,  # Will use settings
+        )
+        context = TenantContext(
+            tenant_id=tenant.id,
+            user_id=user_id,
+            channel=Channel(channel),
+            session_id=f"mission_{user_id}_{tenant.id}",
+            llm_config=llm_config,
+            allowed_skills=allowed_skills,
+        )
+
+        # Simple single-turn execution
+        messages = [{"role": "user", "content": mission_prompt}]
+        tools = await self.tool_gateway.list_tools(context)
+
+        response = await self.llm_port.chat(
+            context=context,
+            messages=messages,
+            tools=tools if tools else None,
+            tool_choice="auto",
+        )
+
+        # If tool calls, execute them (max 3 rounds)
+        for _ in range(3):
+            if not response.tool_calls:
+                break
+
+            for tc in response.tool_calls:
+                import json
+                try:
+                    args = json.loads(tc["function"]["arguments"]) if isinstance(tc["function"]["arguments"], str) else tc["function"]["arguments"]
+                except Exception:
+                    args = {}
+                tool_result = await self.tool_gateway.call_tool(context, tc["function"]["name"], args)
+                messages.append({"role": "assistant", "content": None, "tool_calls": response.tool_calls})
+                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": tool_result})
+
+            response = await self.llm_port.chat(context=context, messages=messages, tools=tools)
+
+        return response.content or ""
+

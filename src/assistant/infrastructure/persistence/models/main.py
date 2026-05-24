@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Integer, BigInteger, JSON, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
-from .database import Base
+from ..database import Base
 
 
 class TenantModel(Base):

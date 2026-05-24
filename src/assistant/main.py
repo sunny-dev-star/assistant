@@ -19,7 +19,7 @@ from .domain.services.conversation_context_service import ConversationContextSer
 from .app.services.assistant_chat_app_service import ConversationAppService
 from .infrastructure.middleware.tenant_auth import TenantAuthMiddleware
 
-from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat, billing, outbound
+from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat, billing, outbound, internal
 
 
 @asynccontextmanager
@@ -97,16 +97,14 @@ async def lifespan(app: FastAPI):
     app.state.mcp_client = mcp_client
     app.state.llm_adapter = llm_adapter
 
-    # 7. Outbound scheduler
-    from .app.services.outbound_scheduler import OutboundScheduler
-    outbound_scheduler = OutboundScheduler()
-    outbound_scheduler.configure(app_service=assistant_chat_app_service)
-    outbound_scheduler.start()
-    app.state.outbound_scheduler = outbound_scheduler
-    if outbound_scheduler.job_count > 0:
-        print(f"[Init] Outbound: {outbound_scheduler.job_count} scheduled jobs")
-    else:
-        print("[Init] Outbound scheduler ready (no jobs scheduled)")
+    # 7. TaskScheduler (replaces old outbound scheduler)
+    from .infrastructure.scheduler import TaskScheduler
+    from .infrastructure.alerting.feishu_alert import FeishuAlerter
+    feishu_alerter = FeishuAlerter(webhook_url=settings.FEISHU_WEBHOOK_URL if hasattr(settings, 'FEISHU_WEBHOOK_URL') else "")
+    scheduler = TaskScheduler(app_service=assistant_chat_app_service, alerter=feishu_alerter)
+    await scheduler.start()
+    app.state.scheduler = scheduler
+    print(f"[Init] TaskScheduler: {scheduler.job_count} tasks restored")
     app.state.use_db = use_db
 
     auth_status = "ON (Bearer token required)" if settings.AUTH_ENABLED else "OFF (dev mode, auto-tenant)"
@@ -116,9 +114,9 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup
-    outbound_scheduler = getattr(app.state, 'outbound_scheduler', None)
-    if outbound_scheduler:
-        outbound_scheduler.stop()
+    scheduler = getattr(app.state, 'scheduler', None)
+    if scheduler:
+        scheduler.shutdown()
     await mcp_client.cleanup()
 
 
@@ -147,6 +145,7 @@ app.include_router(ecommerce.router, prefix="/v1", tags=["Ecommerce"])
 app.include_router(wechat.router, prefix="/webhook", tags=["WeChat Webhook"])
 app.include_router(billing.router, prefix="/v1/admin", tags=["Billing & Usage"])
 app.include_router(outbound.router, prefix="/v1/admin", tags=["Outbound Scheduler"])
+app.include_router(internal.router, tags=["Internal"])
 
 
 @app.get("/")
