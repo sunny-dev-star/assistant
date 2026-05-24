@@ -62,7 +62,7 @@
 │   └── backup.sh                  # 数据库自动备份（pg_dump + gzip + OSS）
 ├── nginx/                         # Nginx 反向代理 + SSL
 ├── init.sql                       # 数据库 Schema（Docker 自动建表）
-├── docker-compose.yml             # 容器编排（10 个服务）
+├── docker-compose.yml             # 容器编排（9 个服务）
 └── .env                           # 环境变量
 ```
 
@@ -139,8 +139,8 @@ cp .env.example .env
 # 2. 一键部署
 docker-compose up -d
 
-# 包含 10 个服务：
-# agent-engine, postgres, pgvector, redis, minio,
+# 包含 9 个服务：
+# agent-engine, postgres (pgvector), redis, minio,
 # nginx, certbot, prometheus, grafana, backup
 
 # 3. 验证
