@@ -1,5 +1,6 @@
 """
 Chat router - unified endpoint with tenant authentication + role-based permissions
+Supports per-tenant LLM endpoint/model/api_key configuration
 """
 import uuid
 from fastapi import APIRouter, Request
@@ -40,6 +41,7 @@ async def chat(
     Unified chat endpoint.
     Tenant is injected by TenantAuthMiddleware from Bearer token (or default in dev mode).
     Role-based permission filtering is applied automatically via ToolGatewayAdapter.
+    LLM config (model / api_base / api_key) resolved per-tenant with global fallback.
     """
     app_service = request.app.state.assistant_chat_app_service
     tenant = request.state.tenant
@@ -47,13 +49,16 @@ async def chat(
     session_id = chat_req.session_id or f"sess_{uuid.uuid4().hex[:12]}"
     user_id = chat_req.user_id
 
-    # Build LLM config from tenant settings + global API key
-    default_model = tenant.config.get("default_model", "deepseek/deepseek-chat")
+    # Build LLM config: tenant-level overrides global defaults
+    # Priority: tenant.config.xxx > settings.xxx
+    tcfg = tenant.config or {}
     llm_config = LLMConfig(
         provider="openai_compat",
-        model=default_model,
-        api_key=settings.DEEPSEEK_API_KEY or None,
-        api_base=settings.DEEPSEEK_API_URL if settings.DEEPSEEK_API_URL else None,
+        model=tcfg.get("default_model", settings.DEEPSEEK_MODEL or "deepseek/deepseek-chat"),
+        api_key=tcfg.get("llm_api_key") or settings.DEEPSEEK_API_KEY or None,
+        api_base=tcfg.get("llm_api_base") or (settings.DEEPSEEK_API_URL if settings.DEEPSEEK_API_URL else None),
+        temperature=tcfg.get("llm_temperature", 0.7),
+        max_tokens=tcfg.get("llm_max_tokens", 2048),
     )
 
     context = TenantContext(
@@ -62,10 +67,10 @@ async def chat(
         channel=Channel(chat_req.channel),
         session_id=session_id,
         llm_config=llm_config,
-        allowed_skills=tenant.config.get("enabled_skills", []),
+        allowed_skills=tcfg.get("enabled_skills", []),
         metadata={
             **(chat_req.metadata or {}),
-            "window_size": tenant.config.get("window_size", 10),
+            "window_size": tcfg.get("window_size", 10),
         }
     )
 

@@ -1,5 +1,5 @@
 """
-租户管理路由 — 含角色自动初始化
+租户管理路由 — 含角色自动初始化 + 配置管理
 """
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
@@ -17,15 +17,18 @@ class CreateTenantRequest(BaseModel):
     config: Optional[Dict[str, Any]] = None
 
 
-class TenantResponse(BaseModel):
-    """租户响应"""
-    tenant_id: str
-    name: str
-    industry: Optional[str]
-    plan: str
-    status: str
-    api_key: str
-    created_at: str
+class UpdateTenantConfigRequest(BaseModel):
+    """更新租户配置请求"""
+    # LLM 配置
+    default_model: Optional[str] = None
+    llm_api_base: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    llm_temperature: Optional[float] = None
+    llm_max_tokens: Optional[int] = None
+    # 技能配置
+    enabled_skills: Optional[List[str]] = None
+    # 通用配置
+    window_size: Optional[int] = None
 
 
 @router.post("/tenants")
@@ -61,6 +64,7 @@ async def create_tenant(req: CreateTenantRequest, request: Request):
             "api_key": result["api_key"],
             "admin_role": result.get("admin_role"),
             "default_role": result.get("default_role"),
+            "config": tenant.config,
             "created_at": tenant.created_at.isoformat() if tenant.created_at else None,
         }
 
@@ -80,13 +84,14 @@ async def list_tenants(skip: int = 0, limit: int = 100):
             "industry": t.industry,
             "plan": t.plan,
             "status": t.status,
+            "config": t.config,
             "created_at": t.created_at.isoformat() if t.created_at else None,
         } for t in tenants]
 
 
 @router.get("/tenants/{tenant_id}")
 async def get_tenant(tenant_id: str):
-    """获取租户详情"""
+    """获取租户详情（含完整配置）"""
     from ....infrastructure.persistence.database import async_session_factory
     from ....infrastructure.persistence.sqlalchemy_tenant_repository import SQLAlchemyTenantRepository
 
@@ -95,7 +100,44 @@ async def get_tenant(tenant_id: str):
         tenant = await repo.get_by_id(tenant_id)
         if not tenant:
             raise HTTPException(status_code=404, detail="Tenant not found")
-        return tenant.to_dict()
+        d = tenant.to_dict()
+        # 脱敏：不返回 llm_api_key 明文
+        if d.get("config", {}).get("llm_api_key"):
+            key = d["config"]["llm_api_key"]
+            d["config"]["llm_api_key"] = key[:6] + "..." + key[-4:] if len(key) > 10 else "***"
+        return d
+
+
+@router.patch("/tenants/{tenant_id}/config")
+async def update_tenant_config(tenant_id: str, req: UpdateTenantConfigRequest, request: Request):
+    """
+    更新租户配置（LLM 端点/模型/密钥 + 技能列表等）
+    只更新传入的字段，不覆盖未传入的字段
+    """
+    from ....infrastructure.persistence.database import async_session_factory
+    from ....infrastructure.persistence.sqlalchemy_tenant_repository import SQLAlchemyTenantRepository
+
+    async with async_session_factory() as session:
+        repo = SQLAlchemyTenantRepository(session)
+        tenant = await repo.get_by_id(tenant_id)
+        if not tenant:
+            raise HTTPException(status_code=404, detail="Tenant not found")
+
+        # 合并配置：只覆盖传入的字段
+        config = dict(tenant.config or {})
+        updates = req.model_dump(exclude_none=True)
+        config.update(updates)
+
+        tenant.update_config(config)
+        updated = await repo.update(tenant)
+        await session.commit()
+
+        result = updated.to_dict()
+        # 脱敏
+        if result.get("config", {}).get("llm_api_key"):
+            key = result["config"]["llm_api_key"]
+            result["config"]["llm_api_key"] = key[:6] + "..." + key[-4:] if len(key) > 10 else "***"
+        return result
 
 
 @router.delete("/tenants/{tenant_id}")
