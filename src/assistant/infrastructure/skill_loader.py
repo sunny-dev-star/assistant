@@ -442,7 +442,12 @@ class SkillLoader:
                 f"租户 {tenant.id} 未购买技能 {skill_name}"
             )
 
-        tool_whitelist = grants.get(skill_name)
+        if skill_name not in grants:
+            # 角色未被授权使用此技能
+            raise PermissionError(
+                f"角色无权使用技能 {skill_name}"
+            )
+        tool_whitelist = grants[skill_name]
         if tool_whitelist is not None and tool_name not in tool_whitelist:
             raise PermissionError(
                 f"角色无权调用工具 {skill_name}.{tool_name}"

@@ -1,7 +1,7 @@
 """
 Role & permission ORM models
 """
-from sqlalchemy import Column, String, Boolean, Text, BigInteger, JSON, DateTime, ForeignKey
+from sqlalchemy import Column, String, Boolean, Text, Integer, JSON, DateTime, ForeignKey
 from sqlalchemy.sql import func
 
 from ..database import Base
@@ -26,7 +26,7 @@ class RoleSkillGrantModel(Base):
     """角色技能授权表 — 控制角色能用哪个技能的哪些工具"""
     __tablename__ = "role_skill_grants"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     role_id = Column(String(50), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
     skill_name = Column(String(50), nullable=False)
     # NULL → 该技能所有工具均可用; [...] → 只能使用白名单内的工具
