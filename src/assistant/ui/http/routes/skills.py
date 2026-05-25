@@ -1,6 +1,6 @@
 """
-技能管理路由 - 对齐 Claude Skill 规范
-提供三级加载的 API 端点
+技能管理路由 - 四层权限感知
+提供技能列表、详情、工具列表的 API 端点
 """
 from fastapi import APIRouter, Request, HTTPException
 from typing import Optional
@@ -12,13 +12,17 @@ router = APIRouter()
 @router.get("/skills")
 async def list_skills(request: Request):
     """
-    列出所有技能（Level 1: 元数据）
-    只有 name + description，用于触发匹配
+    列出租户可见的技能（不暴露未购买技能）
     """
+    tenant = request.state.tenant
     loader = request.app.state.skill_loader
+
+    # 使用新的租户感知方法
+    skills = loader.list_skills_for_tenant(tenant)
+
     return {
-        "skills": loader.get_skill_info(),
-        "total": loader.skill_count,
+        "skills": skills,
+        "total": len(skills),
         "tools_total": loader.tool_count,
     }
 
@@ -29,10 +33,16 @@ async def get_skill_detail(request: Request, skill_id: str):
     获取技能详情（Level 2: SKILL.md body）
     """
     loader = request.app.state.skill_loader
-    skill_data = loader.skills.get(skill_id)
+    tenant = request.state.tenant
 
+    skill_data = loader.skills.get(skill_id)
     if not skill_data:
         raise HTTPException(status_code=404, detail=f"Skill not found: {skill_id}")
+
+    # 权限检查：租户是否可用此技能
+    tenant_enabled = set(tenant.config.get("enabled_skills", []))
+    if skill_id not in loader._platform and skill_id not in tenant_enabled:
+        raise HTTPException(status_code=403, detail=f"Skill not available: {skill_id}")
 
     meta = skill_data.get("metadata", {})
     body = skill_data.get("body", "")
@@ -62,6 +72,33 @@ async def get_skill_detail(request: Request, skill_id: str):
             for a in skill_data.get("assets", [])
         ],
     }
+
+
+@router.get("/skills/{skill_id}/tools")
+async def list_skill_tools(skill_id: str, request: Request):
+    """
+    返回该用户在该技能下可用的工具（含角色过滤）
+    """
+    tenant = request.state.tenant
+    user_id = request.query_params.get("user_id", "anonymous")
+    loader = request.app.state.skill_loader
+    role_repo = getattr(request.app.state, 'role_repo', None)
+
+    if role_repo:
+        tools = await loader.get_tools_for_user(
+            tenant, user_id, role_repo
+        )
+        skill_tools = [
+            t for t in tools
+            if loader._tool_to_skill.get(t["function"]["name"]) == skill_id
+        ]
+    else:
+        skill_data = loader.skills.get(skill_id)
+        if not skill_data:
+            raise HTTPException(status_code=404, detail=f"Skill not found: {skill_id}")
+        skill_tools = skill_data.get("tools", [])
+
+    return {"tools": skill_tools}
 
 
 @router.get("/skills/{skill_id}/references/{ref_name}")

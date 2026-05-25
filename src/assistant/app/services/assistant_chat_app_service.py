@@ -1,5 +1,5 @@
 """
-通用对话应用服务 (with Prometheus metrics)
+通用对话应用服务 (with Prometheus metrics + role-based permissions)
 """
 import uuid
 import logging
@@ -58,10 +58,23 @@ class ConversationAppService:
             )
             await self.message_repo.create(user_msg)
 
-            # 3. 准备工具列表
+            # 3. 准备工具列表（含角色权限过滤）
             tools = await self.tool_gateway.list_tools(context)
 
+            # 获取角色相关的 system prompt
             system_prompt = "你是「小助手」，一个友好智能的客服。"
+            tenant = getattr(context, '_tenant_entity', None)
+            if tenant and getattr(self.tool_gateway, 'role_repo_factory', None):
+                role_name = context.metadata.get("role_name") if context.metadata else None
+                from ...infrastructure.persistence.database import async_session_factory
+                from ...infrastructure.persistence.repositories.role_repo import RoleRepository
+                async with async_session_factory() as session:
+                    rr = RoleRepository(session)
+                    custom_prompt = await self.tool_gateway.skill_loader.get_system_prompt_for_user(
+                        tenant, context.user_id, rr, role_name
+                    )
+                    if custom_prompt:
+                        system_prompt = custom_prompt
 
             max_rounds = 5
             total_tokens = 0
@@ -138,7 +151,6 @@ class ConversationAppService:
                     except Exception as e:
                         logger.error(f"Tool {tool_name} failed: {e}")
                         tool_result_content = json.dumps({"error": str(e)}, ensure_ascii=False)
-                        # --- Metrics: tool error ---
                         try:
                             from ...infrastructure.metrics import tool_call_errors_total
                             tool_call_errors_total.labels(
@@ -147,7 +159,6 @@ class ConversationAppService:
                         except Exception:
                             pass
                     finally:
-                        # --- Metrics: tool latency ---
                         try:
                             from ...infrastructure.metrics import tool_latency_seconds, tool_calls_total
                             tool_latency_seconds.labels(
@@ -183,17 +194,16 @@ class ConversationAppService:
             try:
                 from ...infrastructure.persistence.database import async_session_factory
                 from ...infrastructure.persistence.models import ApiUsageModel
-                import uuid
                 async with async_session_factory() as session:
                     usage = ApiUsageModel(
                         id=f"usage_{uuid.uuid4().hex[:12]}",
                         tenant_id=context.tenant_id,
                         conversation_id=context.session_id,
                         model=context.llm_config.model,
-                        prompt_tokens=0,  # Aggregate from LLM responses
+                        prompt_tokens=0,
                         completion_tokens=0,
                         total_tokens=total_tokens,
-                        cost_usd=int(total_cost * 1_000_000),  # micro-dollars
+                        cost_usd=int(total_cost * 1_000_000),
                         skill_name=skill_used,
                         channel=str(context.channel),
                     )
@@ -210,7 +220,6 @@ class ConversationAppService:
             }
 
         except Exception as e:
-            # --- Metrics: error ---
             try:
                 from ...infrastructure.metrics import chat_request_errors_total
                 chat_request_errors_total.labels(
@@ -223,7 +232,6 @@ class ConversationAppService:
             raise
 
         finally:
-            # --- Metrics: latency + request count ---
             try:
                 from ...infrastructure.metrics import chat_requests_total, chat_latency_seconds
                 chat_latency_seconds.labels(tenant_id=context.tenant_id).observe(
@@ -249,15 +257,23 @@ class ConversationAppService:
         skill_name: str,
         tool_name: str,
         tool_args: dict,
+        role_name: str = None,
     ) -> str:
         """
         Scheduler-only: bypass LLM, execute a specific tool directly.
+        Includes role-based permission check.
         """
-        from ...domain.models.context import TenantContext, LLMConfig
-        from ...domain.value_objects.channel import Channel
+        if getattr(self.tool_gateway, 'role_repo_factory', None) and tenant:
+            from ...infrastructure.persistence.database import async_session_factory
+            from ...infrastructure.persistence.repositories.role_repo import RoleRepository
+            async with async_session_factory() as session:
+                rr = RoleRepository(session)
+                await self.tool_gateway.skill_loader._assert_tool_access(
+                    tenant, user_id, rr, skill_name, tool_name
+                )
 
         result = await self.tool_gateway.call_tool(
-            context=None,  # No conversation context for scheduler
+            context=None,
             tool_name=tool_name,
             args=tool_args,
         )
@@ -270,6 +286,7 @@ class ConversationAppService:
         channel: str,
         mission_prompt: str,
         allowed_skills: list,
+        role_name: str = None,
     ) -> str:
         """
         Scheduler-only: run an agent loop with restricted skill set.
@@ -280,7 +297,7 @@ class ConversationAppService:
         llm_config = LLMConfig(
             provider="openai_compat",
             model=tenant.config.get("default_model", "deepseek/deepseek-chat"),
-            api_key=None,  # Will use settings
+            api_key=None,
         )
         context = TenantContext(
             tenant_id=tenant.id,
@@ -289,9 +306,10 @@ class ConversationAppService:
             session_id=f"mission_{user_id}_{tenant.id}",
             llm_config=llm_config,
             allowed_skills=allowed_skills,
+            metadata={"role_name": role_name} if role_name else {},
         )
+        context._tenant_entity = tenant
 
-        # Simple single-turn execution
         messages = [{"role": "user", "content": mission_prompt}]
         tools = await self.tool_gateway.list_tools(context)
 
@@ -302,13 +320,11 @@ class ConversationAppService:
             tool_choice="auto",
         )
 
-        # If tool calls, execute them (max 3 rounds)
         for _ in range(3):
             if not response.tool_calls:
                 break
 
             for tc in response.tool_calls:
-                import json
                 try:
                     args = json.loads(tc["function"]["arguments"]) if isinstance(tc["function"]["arguments"], str) else tc["function"]["arguments"]
                 except Exception:
@@ -320,4 +336,3 @@ class ConversationAppService:
             response = await self.llm_port.chat(context=context, messages=messages, tools=tools)
 
         return response.content or ""
-

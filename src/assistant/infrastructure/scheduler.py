@@ -96,7 +96,7 @@ class TaskScheduler:
     async def _execute_task(self, task: dict):
         async with async_session_factory() as session:
             repo = TaskRepository(session)
-            log_id = await repo.create_log(task["id"], task["tenant_id"])
+            log_id = await repo.create_log(task["tenant_id"], task["tenant_id"])
 
             result = None
             error = None
@@ -139,8 +139,6 @@ class TaskScheduler:
         """Mode 1: push fixed text"""
         msg = task.get("message", "")
         logger.info(f"[message] Task {task['id']}: {msg[:50]}")
-        # In production, send via channel adapter
-        # For now, record in conversation
         return msg
 
     async def _execute_skill_invoke(self, task: dict, repo) -> str:
@@ -148,6 +146,9 @@ class TaskScheduler:
         tenant = await self._get_tenant_and_check_skill(
             task["tenant_id"], task.get("skill_name", ""), task["id"]
         )
+        # 使用任务创建时的角色做权限校验
+        role_name = task.get("role_name")
+
         if self._app_service:
             result = await self._app_service.invoke_tool_directly(
                 tenant=tenant,
@@ -156,6 +157,7 @@ class TaskScheduler:
                 skill_name=task.get("skill_name", ""),
                 tool_name=task.get("tool_name", ""),
                 tool_args=task.get("tool_args", {}),
+                role_name=role_name,
             )
             return result or ""
         return "AppService not available"
@@ -167,10 +169,10 @@ class TaskScheduler:
         steps = task.get("steps", [])
         ctx = {}
         final_output = None
+        role_name = task.get("role_name")
 
         for step in steps:
             skill_name = step.get("skill_name", "")
-            # Check skill permission per step
             if skill_name != "platform":
                 enabled = tenant.config.get("enabled_skills", [])
                 if skill_name not in enabled:
@@ -189,6 +191,7 @@ class TaskScheduler:
                     skill_name=skill_name,
                     tool_name=step.get("tool_name", ""),
                     tool_args=args,
+                    role_name=role_name,
                 )
             else:
                 result = "AppService not available"
@@ -206,6 +209,7 @@ class TaskScheduler:
 
         enabled = set(tenant.config.get("enabled_skills", []))
         mission_skills = [s for s in task.get("mission_skills", []) if s in enabled or s == "platform"]
+        role_name = task.get("role_name")
 
         prompt = task.get("mission_prompt", "")
         if task.get("context_as_input") and task.get("last_result"):
@@ -218,6 +222,7 @@ class TaskScheduler:
                 channel=task["channel"],
                 mission_prompt=prompt,
                 allowed_skills=mission_skills,
+                role_name=role_name,
             )
             return result or ""
         return "AppService not available"

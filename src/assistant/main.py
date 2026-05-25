@@ -1,5 +1,5 @@
 """
-HTTP API entry point - Multi-tenant with auth middleware + DB persistence
+HTTP API entry point - Multi-tenant with auth middleware + DB persistence + role-based permissions
 """
 import json
 from pathlib import Path
@@ -19,7 +19,7 @@ from .domain.services.conversation_context_service import ConversationContextSer
 from .app.services.assistant_chat_app_service import ConversationAppService
 from .infrastructure.middleware.tenant_auth import TenantAuthMiddleware
 
-from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat, billing, outbound, internal
+from .ui.http.routes import chat, tenant, health, ecommerce, skills, wechat, billing, outbound, internal, roles
 
 
 @asynccontextmanager
@@ -81,7 +81,14 @@ async def lifespan(app: FastAPI):
         print("[Init] Message repository: In-Memory")
 
     context_service = ConversationContextService(llm_port=llm_adapter)
-    tool_gateway = ToolGatewayAdapter(skill_loader, mcp_client)
+
+    # Tool gateway — DB 模式下注入 role_repo_factory
+    role_repo_factory = None
+    if use_db:
+        from .infrastructure.persistence.database import async_session_factory
+        from .infrastructure.persistence.repositories.role_repo import RoleRepository
+        role_repo_factory = lambda session: RoleRepository(session)
+    tool_gateway = ToolGatewayAdapter(skill_loader, mcp_client, role_repo_factory)
 
     # 6. App Service
     assistant_chat_app_service = ConversationAppService(
@@ -96,6 +103,7 @@ async def lifespan(app: FastAPI):
     app.state.skill_loader = skill_loader
     app.state.mcp_client = mcp_client
     app.state.llm_adapter = llm_adapter
+    app.state.use_db = use_db
 
     # 7. TaskScheduler (replaces old outbound scheduler)
     from .infrastructure.scheduler import TaskScheduler
@@ -105,7 +113,9 @@ async def lifespan(app: FastAPI):
     await scheduler.start()
     app.state.scheduler = scheduler
     print(f"[Init] TaskScheduler: {scheduler.job_count} tasks restored")
-    app.state.use_db = use_db
+
+    if use_db:
+        print("[Init] Role-based permissions: enabled (DB-backed)")
 
     auth_status = "ON (Bearer token required)" if settings.AUTH_ENABLED else "OFF (dev mode, auto-tenant)"
     print(f"[Init] Auth: {auth_status}")
@@ -141,6 +151,7 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(chat.router, prefix="/v1", tags=["Chat"])
 app.include_router(skills.router, prefix="/v1", tags=["Skills"])
 app.include_router(tenant.router, prefix="/v1/admin", tags=["Tenant Admin"])
+app.include_router(roles.router, prefix="/v1/admin/roles", tags=["Role Management"])
 app.include_router(ecommerce.router, prefix="/v1", tags=["Ecommerce"])
 app.include_router(wechat.router, prefix="/webhook", tags=["WeChat Webhook"])
 app.include_router(billing.router, prefix="/v1/admin", tags=["Billing & Usage"])
@@ -153,13 +164,11 @@ async def root():
     return {
         "service": "Assistant API",
         "version": "5.0.0",
-        "features": ["multi-tenant", "skill-sdk", "mcp", "litellm"],
+        "features": ["multi-tenant", "skill-sdk", "mcp", "litellm", "role-permissions"],
         "auth_enabled": settings.AUTH_ENABLED,
         "persistence": "database" if settings.DATABASE_URL else "none",
         "docs": "/docs",
     }
-
-
 
 
 @app.get("/metrics")
@@ -168,7 +177,6 @@ async def metrics():
     from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
     from starlette.responses import Response as StarletteResponse
 
-    # Update app info
     try:
         from .infrastructure.metrics import app_info
         app_info.info({"version": "5.0.0", "service": "assistant-api"})

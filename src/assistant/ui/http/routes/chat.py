@@ -1,5 +1,5 @@
 """
-Chat router - unified endpoint with tenant authentication
+Chat router - unified endpoint with tenant authentication + role-based permissions
 """
 import uuid
 from fastapi import APIRouter, Request
@@ -39,6 +39,7 @@ async def chat(
     """
     Unified chat endpoint.
     Tenant is injected by TenantAuthMiddleware from Bearer token (or default in dev mode).
+    Role-based permission filtering is applied automatically via ToolGatewayAdapter.
     """
     app_service = request.app.state.assistant_chat_app_service
     tenant = request.state.tenant
@@ -67,6 +68,9 @@ async def chat(
             "window_size": tenant.config.get("window_size", 10),
         }
     )
+
+    # 绑定 tenant entity 到 context，供 ToolGateway 权限过滤使用
+    context._tenant_entity = tenant
 
     result = await app_service.execute(
         context=context,

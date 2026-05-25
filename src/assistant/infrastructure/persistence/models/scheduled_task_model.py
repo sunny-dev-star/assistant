@@ -34,6 +34,9 @@ class ScheduledTaskModel(Base):
     result_as_message = Column(Boolean, default=True)
     skill_disabled_action = Column(String(20), default="notify_admin")
 
+    # 角色上下文 — 记录任务创建时的操作角色，触发时做权限校验
+    role_name = Column(String(50))
+
     is_active = Column(Boolean, default=True)
     last_run_at = Column(DateTime)
     last_result = Column(Text)

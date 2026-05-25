@@ -40,5 +40,6 @@ async def init_db():
     """Create all tables"""
     from . import models  # noqa: F401 - main models
     from .models.scheduled_task_model import ScheduledTaskModel, TaskExecutionLogModel  # noqa: F401
+    from .models.role_model import RoleModel, RoleSkillGrantModel, UserRoleModel  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
