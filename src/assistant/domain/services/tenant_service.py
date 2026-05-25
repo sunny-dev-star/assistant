@@ -27,7 +27,8 @@ class TenantService:
         self,
         name: str,
         industry: Optional[str] = None,
-        plan: str = "basic"
+        plan: str = "basic",
+        config: dict = None
     ) -> dict:
         """
         创建租户，同时初始化两个默认角色（admin + default）
@@ -45,6 +46,8 @@ class TenantService:
             api_key=ApiKey(api_key),
             quota=Quota.default(),
         )
+        if config:
+            tenant.config = config
         created_tenant = await self.tenant_repo.create(tenant)
 
         # 2. 创建管理员角色（绕过技能白名单）

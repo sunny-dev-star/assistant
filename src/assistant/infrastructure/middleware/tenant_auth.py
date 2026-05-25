@@ -27,7 +27,13 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if not settings.AUTH_ENABLED:
-            # Dev mode: auto-inject default tenant
+            # Dev mode: try Bearer token first, fall back to default tenant
+            api_key = self._extract_api_key(request)
+            if api_key:
+                tenant = await self._resolve_tenant(api_key)
+                if tenant:
+                    request.state.tenant = tenant
+                    return await call_next(request)
             request.state.tenant = await self._get_default_tenant()
             return await call_next(request)
 
@@ -90,6 +96,6 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
             config={
                 "window_size": 10,
                 "default_model": "deepseek/deepseek-chat",
-                "enabled_skills": ["weather_query", "express_query"],
+                "enabled_skills": ["elder_care", "weather_query", "express_query"],
             }
         )

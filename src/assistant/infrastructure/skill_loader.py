@@ -64,7 +64,9 @@ class SkillLoader:
                         skill = self._parse_skill_md(sub)
                         if skill:
                             skill["scope"] = "platform"
-                            self._platform[skill["name"]] = skill
+                            # 用目录名作为 key，保持一致性
+                            skill_key = sub.name
+                            self._platform[skill_key] = skill
                             # 兼容旧结构
                             self.skills[skill["name"]] = self._to_legacy_format(sub, skill)
                             for t in skill["tools"]:
@@ -80,7 +82,7 @@ class SkillLoader:
                     skill = self._parse_skill_md(item)
                     if skill:
                         skill["scope"] = "industry"
-                        self._industry[skill["name"]] = skill
+                        self._industry[item.name] = skill
                         # 兼容旧结构
                         self.skills[skill["name"]] = self._to_legacy_format(item, skill)
                         for t in skill["tools"]:

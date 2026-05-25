@@ -47,6 +47,7 @@ async def create_tenant(req: CreateTenantRequest, request: Request):
             name=req.name,
             industry=req.industry,
             plan=req.plan,
+            config=req.config,
         )
         await session.commit()
 
