@@ -19,12 +19,21 @@ class CreateTenantRequest(BaseModel):
 
 class UpdateTenantConfigRequest(BaseModel):
     """更新租户配置请求"""
-    # LLM 配置
+    # LLM 文本模型配置
     default_model: Optional[str] = None
     llm_api_base: Optional[str] = None
     llm_api_key: Optional[str] = None
     llm_temperature: Optional[float] = None
     llm_max_tokens: Optional[int] = None
+    # 视觉模型配置（图片理解）
+    vision_model: Optional[str] = None          # e.g. "gpt-4o", "qwen-vl-max"
+    vision_api_base: Optional[str] = None
+    vision_api_key: Optional[str] = None
+    # 语音转文字配置
+    stt_provider: Optional[str] = None           # "whisper", "aliyun", "tencent"
+    stt_model: Optional[str] = None              # "whisper-1"
+    stt_api_base: Optional[str] = None
+    stt_api_key: Optional[str] = None
     # 技能配置
     enabled_skills: Optional[List[str]] = None
     # 通用配置

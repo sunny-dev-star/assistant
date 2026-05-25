@@ -36,9 +36,10 @@ class ConversationAppService:
         self,
         context: TenantContext,
         user_message_content: str,
-        user_name: str = None
+        user_name: str = None,
+        attachments: list = None
     ) -> Dict[str, Any]:
-        """执行一轮对话"""
+        """执行一轮对话（支持多模态附件）"""
         start_time = time.time()
         skill_used = None
 
@@ -54,7 +55,8 @@ class ConversationAppService:
                 context=context,
                 history=history,
                 content=user_message_content,
-                user_name=user_name
+                user_name=user_name,
+                attachments=attachments,
             )
             await self.message_repo.create(user_msg)
 

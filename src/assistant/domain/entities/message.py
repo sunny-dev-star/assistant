@@ -1,5 +1,5 @@
 """
-消息实体 (Message Entity)
+消息实体 (Message Entity) — 支持多模态 (text / image / voice / file)
 """
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -8,31 +8,64 @@ import uuid
 
 
 @dataclass
+class Attachment:
+    """消息附件（图片/语音/文件）"""
+    type: str = "image"  # image / voice / file
+    url: str = ""        # 可访问的 URL
+    base64: str = ""     # base64 编码（可选，优先用 url）
+    mime_type: str = ""  # image/jpeg, audio/wav, application/pdf 等
+    name: str = ""       # 文件名
+    size: int = 0        # 字节大小
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = {"type": self.type, "url": self.url, "mime_type": self.mime_type,
+             "name": self.name, "size": self.size}
+        if self.base64:
+            d["base64"] = self.base64[:20] + "...(truncated)"  # 存储时截断
+        return d
+
+    def to_llm_content(self) -> Dict[str, Any]:
+        """构造传给 LLM 的多模态 content 片段"""
+        if self.type == "image":
+            if self.url:
+                return {"type": "image_url", "image_url": {"url": self.url}}
+            elif self.base64:
+                return {"type": "image_url", "image_url": {
+                    "url": f"data:{self.mime_type or 'image/jpeg'};base64,{self.base64}"
+                }}
+        elif self.type == "file":
+            # 文件内容已经提取为文本，放在 content 里
+            return {"type": "text", "text": f"[附件: {self.name}]\n{self.url}"}
+        return {"type": "text", "text": f"[{self.type}: {self.url}]"}
+
+
+@dataclass
 class Message:
     """消息实体"""
-    
+
     id: str = field(default_factory=lambda: f"msg_{uuid.uuid4().hex[:12]}")
     conversation_id: str = ""
     tenant_id: str = ""
-    
+
     role: str = "user"  # user / assistant / system / tool
-    name: Optional[str] = None  # 支持群聊场景等区分不同用户
+    name: Optional[str] = None
     content: str = ""
-    content_type: str = "text"  # text / image / voice / file / tool_calls
-    
-    tool_calls: Optional[List[Dict[str, Any]]] = None # 当 role=assistant 且调用了工具时
-    tool_call_id: Optional[str] = None # 当 role=tool 时，关联的 tool_call_id
-    
+    content_type: str = "text"  # text / image / voice / file / multimodal / tool_calls
+
+    # 多模态附件列表
+    attachments: List[Attachment] = field(default_factory=list)
+
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
+
     tokens_used: int = 0
     skill_used: Optional[str] = None
-    
+
     metadata: Dict[str, Any] = field(default_factory=dict)
-    
     created_at: datetime = field(default_factory=datetime.utcnow)
-    
+
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
-        return {
+        d = {
             "id": self.id,
             "conversation_id": self.conversation_id,
             "tenant_id": self.tenant_id,
@@ -45,9 +78,12 @@ class Message:
             "tokens_used": self.tokens_used,
             "skill_used": self.skill_used,
             "metadata": self.metadata,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat(),
         }
-    
+        if self.attachments:
+            d["attachments"] = [a.to_dict() for a in self.attachments]
+        return d
+
     @classmethod
     def create_user_message(
         cls,
@@ -56,9 +92,9 @@ class Message:
         content: str,
         name: Optional[str] = None,
         content_type: str = "text",
+        attachments: List[Attachment] = None,
         metadata: Dict[str, Any] = None
     ) -> "Message":
-        """创建用户消息"""
         return cls(
             conversation_id=conversation_id,
             tenant_id=tenant_id,
@@ -66,9 +102,10 @@ class Message:
             name=name,
             content=content,
             content_type=content_type,
+            attachments=attachments or [],
             metadata=metadata or {}
         )
-    
+
     @classmethod
     def create_assistant_message(
         cls,
@@ -80,7 +117,6 @@ class Message:
         skill_used: Optional[str] = None,
         metadata: Dict[str, Any] = None
     ) -> "Message":
-        """创建助手消息"""
         return cls(
             conversation_id=conversation_id,
             tenant_id=tenant_id,
@@ -92,7 +128,7 @@ class Message:
             skill_used=skill_used,
             metadata=metadata or {}
         )
-        
+
     @classmethod
     def create_tool_message(
         cls,
@@ -103,7 +139,6 @@ class Message:
         name: str,
         metadata: Dict[str, Any] = None
     ) -> "Message":
-        """创建工具结果消息"""
         return cls(
             conversation_id=conversation_id,
             tenant_id=tenant_id,

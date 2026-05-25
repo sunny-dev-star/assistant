@@ -2,6 +2,7 @@
 Conversation context management domain service
 - Configurable sliding window (per-tenant)
 - Auto-summarize long conversations
+- Multimodal message support (image/voice/file attachments)
 """
 from typing import List, Dict, Any
 
@@ -24,7 +25,7 @@ class ConversationContextService:
         history: List[Message],
         system_prompt: str = ""
     ) -> List[Dict[str, Any]]:
-        """Build message list for LLM from history"""
+        """Build message list for LLM from history — supports multimodal"""
         window_size = context.metadata.get("window_size", self.DEFAULT_WINDOW)
         window_size = min(window_size, self.MAX_WINDOW)
 
@@ -32,34 +33,99 @@ class ConversationContextService:
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
 
-        # Keep last window_size * 2 messages (user + assistant each round)
         history_to_keep = history[-(window_size * 2):]
 
         for msg in history_to_keep:
-            m: Dict[str, Any] = {"role": msg.role, "content": msg.content}
-            if msg.name:
-                m["name"] = msg.name
-            if msg.role == "assistant" and msg.tool_calls:
-                m["tool_calls"] = msg.tool_calls
-            elif msg.role == "tool" and msg.tool_call_id:
-                m["tool_call_id"] = msg.tool_call_id
+            m = self._message_to_llm_dict(msg)
             messages.append(m)
 
         return messages
+
+    def _message_to_llm_dict(self, msg: Message) -> Dict[str, Any]:
+        """
+        将 Message 实体转为 LLM API 消息格式。
+        支持纯文本和多模态（带附件）消息。
+        """
+        # tool 消息特殊格式
+        if msg.role == "tool":
+            m = {"role": "tool", "content": msg.content}
+            if msg.tool_call_id:
+                m["tool_call_id"] = msg.tool_call_id
+            return m
+
+        # assistant 消息
+        if msg.role == "assistant":
+            m = {"role": "assistant", "content": msg.content or None}
+            if msg.name:
+                m["name"] = msg.name
+            if msg.tool_calls:
+                m["tool_calls"] = msg.tool_calls
+                m["content"] = None  # tool_calls 时 content 通常为 null
+            return m
+
+        # user 消息：检查是否有附件
+        if msg.role == "user" and msg.attachments:
+            return self._build_multimodal_user_message(msg)
+
+        # 纯文本 user / system
+        m = {"role": msg.role, "content": msg.content}
+        if msg.name:
+            m["name"] = msg.name
+        return m
+
+    def _build_multimodal_user_message(self, msg: Message) -> Dict[str, Any]:
+        """
+        构建多模态 user 消息（OpenAI vision 格式）。
+        content 从 string 变为 list[dict]：
+        [
+          {"type": "text", "text": "描述一下这张图片"},
+          {"type": "image_url", "image_url": {"url": "https://..."}}
+        ]
+        """
+        content_parts = []
+
+        # 文本部分
+        if msg.content:
+            content_parts.append({"type": "text", "text": msg.content})
+
+        # 附件部分
+        for attachment in msg.attachments:
+            llm_content = attachment.to_llm_content()
+            content_parts.append(llm_content)
+
+        if not content_parts:
+            content_parts.append({"type": "text", "text": ""})
+
+        m = {"role": "user", "content": content_parts}
+        if msg.name:
+            m["name"] = msg.name
+        return m
 
     def append_user_message(
         self,
         context: TenantContext,
         history: List[Message],
         content: str,
-        user_name: str = None
+        user_name: str = None,
+        attachments: list = None,
     ) -> Message:
-        """Create and append user message"""
+        """Create and append user message (supports attachments)"""
+        content_type = "text"
+        if attachments:
+            has_image = any(a.type == "image" for a in attachments)
+            has_voice = any(a.type == "voice" for a in attachments)
+            if has_image:
+                content_type = "multimodal"
+            elif has_voice:
+                content_type = "voice"
+
         msg = Message.create_user_message(
             conversation_id=context.session_id,
             tenant_id=context.tenant_id,
             content=content,
-            name=user_name
+            name=user_name,
+            content_type=content_type,
+            attachments=attachments,
         )
         history.append(msg)
         return msg
@@ -70,10 +136,7 @@ class ConversationContextService:
         history: List[Message],
         system_prompt: str = ""
     ) -> List[Dict[str, Any]]:
-        """
-        If history exceeds window, summarize older messages into a system message.
-        Requires llm_port to be set.
-        """
+        """If history exceeds window, summarize older messages"""
         if not self.llm_port or len(history) <= self.DEFAULT_WINDOW * 2:
             return self.build_context_messages(context, history, system_prompt)
 
@@ -89,13 +152,7 @@ class ConversationContextService:
         messages.append({"role": "system", "content": f"[Conversation Summary] {summary}"})
 
         for msg in recent:
-            m: Dict[str, Any] = {"role": msg.role, "content": msg.content}
-            if msg.name:
-                m["name"] = msg.name
-            if msg.role == "assistant" and msg.tool_calls:
-                m["tool_calls"] = msg.tool_calls
-            elif msg.role == "tool" and msg.tool_call_id:
-                m["tool_call_id"] = msg.tool_call_id
+            m = self._message_to_llm_dict(msg)
             messages.append(m)
 
         return messages
@@ -106,7 +163,7 @@ class ConversationContextService:
         text_parts = []
         for m in messages:
             prefix = m.name or m.role
-            text_parts.append(f"{prefix}: {m.content}")
+            text_parts.append(f"{prefix}: {m.content[:200]}")
         text = "\n".join(text_parts)[-2000:]
 
         temp_ctx = TenantContext(
