@@ -42,6 +42,42 @@ services:
       retries: 3
 
   # ============================================
+  # BFF (Backend For Frontend) - NEW
+  # ============================================
+  bff:
+    build:
+      context: .
+      dockerfile: src/Dockerfile
+    container_name: agent-bff
+    command: uvicorn assistant.bff.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://agent:agent123@postgres:5432/agent_db
+      - REDIS_URL=redis://redis:6379/1
+      - CORE_API_URL=http://agent-engine:8000
+      - INTERNAL_TOKEN=${INTERNAL_TOKEN:-dev-internal-token}
+      - BFF_JWT_SECRET=${BFF_JWT_SECRET:-change-me-in-production}
+      - SMS_PROVIDER=${SMS_PROVIDER:-}
+      - SMS_API_KEY=${SMS_API_KEY:-}
+      - ENV=production
+    depends_on:
+      agent-engine:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - agent-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
   # Database (PostgreSQL + pgvector unified)
   # ============================================
   postgres:
@@ -149,8 +185,10 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl
       - certbot_webroot:/var/www/certbot
       - certbot_certs:/etc/letsencrypt
+      - ./frontend/dist:/var/www/frontend
     depends_on:
       - agent-engine
+      - bff
     networks:
       - agent-network
     restart: unless-stopped

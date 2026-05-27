@@ -1,6 +1,4 @@
-"""
-Configuration management
-"""
+"""Configuration management"""
 from pathlib import Path
 from pydantic_settings import BaseSettings
 
@@ -40,6 +38,13 @@ class Settings(BaseSettings):
     AUTH_ENABLED: bool = False
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+
+    # BFF settings
+    CORE_API_URL: str = "http://localhost:8000"
+    INTERNAL_TOKEN: str = "dev-internal-token"
+    BFF_JWT_SECRET: str = "change-me-in-production"
+    BFF_ACCESS_TOKEN_TTL: int = 3 * 3600      # 3 hours
+    BFF_REFRESH_TOKEN_TTL: int = 30 * 24 * 3600  # 30 days
 
     # Monitoring
     PROMETHEUS_ENABLED: bool = True
