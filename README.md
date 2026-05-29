@@ -295,6 +295,7 @@ EOF
 ## 文档
 
 - [贡献指南](CONTRIBUTING.md) — 如何参与开发、提交 PR
+- [微信公众号快速接入](docs/wechat-quickstart.md) — 30 分钟 demo：多租户微信 AI 助手
 - [落地方案](docs/落地方案.md) — 8 周执行路线图（Phase 1-4 已完成）
 - [PRD](docs/PRD.md) — 产品需求文档
 - [DESIGN](docs/DESIGN.md) — 技术设计文档

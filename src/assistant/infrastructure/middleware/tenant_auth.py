@@ -21,9 +21,9 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        # Skip auth for public endpoints
+        # Skip auth for public endpoints and inbound channel webhooks
         path = request.url.path
-        if path in PUBLIC_PATHS or path.startswith("/docs"):
+        if path in PUBLIC_PATHS or path.startswith("/docs") or path.startswith("/webhook/"):
             return await call_next(request)
 
         if not settings.AUTH_ENABLED:
