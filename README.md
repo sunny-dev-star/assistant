@@ -178,7 +178,7 @@ flowchart TB
 
 ```bash
 # 1. 克隆
-git clone https://github.com/sunny-dev-star/assistant.git && cd assistant
+git clone https://github.com/sunny-dev-star/nidari.git && cd nidari
 
 # 2. 依赖
 pip install -r requirements.txt

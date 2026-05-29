@@ -12,8 +12,8 @@
 ## 开发环境
 
 ```bash
-git clone https://github.com/sunny-dev-star/assistant.git
-cd assistant
+git clone https://github.com/sunny-dev-star/nidari.git
+cd nidari
 
 pip install -r requirements.txt
 cp .env.example .env
