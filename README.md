@@ -1,6 +1,23 @@
-# Assistant - 多租户智能体框架
+# Nidari — 多租户 AI 助手自托管底座
 
-面向中小企业的多租户 AI 智能体 SaaS 平台。纯自主引擎，DDD 架构，支持多渠道接入、行业技能插件化、MCP 协议扩展。
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](./LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
+> **让国内团队几小时内，在微信 / 飞书上线一个原生多租户、可私有化部署的 AI 助手。**
+
+**Nidari**（尼达里）源自拉丁语 *nidus*（巢）——一套实例，多个租户共栖一处。
+
+纯自主对话引擎（非 LangChain 套壳），DDD 架构，技能插件化，MCP 协议扩展。一套实例即可服务多个租户 / 客户。
+
+**为什么选它（3 个差异点）：**
+
+- **原生多租户**：从内核按多租户设计——租户级数据隔离、独立模型 / 技能白名单 / 配额，一套实例服务多个客户（多数开源框架是单租户的）。
+- **中国渠道开箱即用**：原生适配微信公众号 / 飞书 / 钉钉，国内上线无需自建渠道（海外框架几乎不做）。
+- **自托管 + 全套运营**：Docker 一键私有化部署，内置 Prometheus / Grafana 监控、飞书告警、按租户用量计费与 CSV 导出。
+
+**适合**：想给自己产品加 AI 助手、或在微信 / 飞书上线多租户智能客服的开发者与中小团队。
+
+[快速开始](#快速开始) · [架构概览](#架构概览) · [添加技能](#添加新技能) · [贡献指南](CONTRIBUTING.md) · [商业授权](COMMERCIAL-LICENSE.md)
 
 ## 技术栈
 
@@ -11,6 +28,55 @@
 - **监控**: Prometheus + Grafana + 飞书告警
 - **容器**: Docker Compose + Nginx + Certbot (HTTPS)
 - **架构**: DDD 分层（UI → App → Domain → Infrastructure）
+
+## 架构概览
+
+```mermaid
+flowchart TB
+    subgraph channels["渠道层"]
+        WX[微信公众号]
+        WEB[Web / REST API]
+        FS[飞书 / 钉钉 可扩展]
+    end
+
+    subgraph nidari["Nidari 核心"]
+        AUTH[TenantAuthMiddleware<br/>Bearer API Key]
+        CHAT[AssistantChatAppService<br/>对话编排 + 工具循环]
+        CTX[ConversationContextService<br/>滑窗 + 自动摘要]
+        SKILLS[Skill Loader<br/>Claude Skill 规范]
+        MCP[MCP Client<br/>stdio / SSE]
+        LLM[LiteLLM Adapter<br/>DeepSeek / Qwen / OpenAI...]
+    end
+
+    subgraph ops["运营层"]
+        BILL[Billing / Usage CSV]
+        PROM[Prometheus + Grafana]
+        ALERT[飞书告警]
+    end
+
+    subgraph data["数据层"]
+        PG[(PostgreSQL)]
+        REDIS[(Redis)]
+        SKDIR[(skills/ 目录)]
+    end
+
+    WX --> AUTH
+    WEB --> AUTH
+    FS --> AUTH
+    AUTH --> CHAT
+    CHAT --> CTX
+    CHAT --> SKILLS
+    CHAT --> MCP
+    CHAT --> LLM
+    SKILLS --> SKDIR
+    CHAT --> PG
+    CHAT --> REDIS
+    CHAT --> BILL
+    CHAT --> PROM
+    PROM --> ALERT
+```
+
+一次请求的典型路径：`渠道 → 租户认证 → 上下文加载 → LLM 推理 →（可选）技能/MCP 工具调用 → 响应落库 → 指标上报`。
 
 ## 项目结构
 
@@ -108,26 +174,29 @@
 
 ## 快速开始
 
-### 开发模式（本地 WSL/macOS）
+### 5 步本地跑通（开发模式）
 
 ```bash
-# 1. 安装依赖
+# 1. 克隆
+git clone https://github.com/sunny-dev-star/assistant.git && cd assistant
+
+# 2. 依赖
 pip install -r requirements.txt
 
-# 2. 配置环境变量
+# 3. 配置（至少填入 DEEPSEEK_API_KEY）
 cp .env.example .env
-# 编辑 .env，填入 DEEPSEEK_API_KEY 等
 
-# 3. 启动服务（SQLite，无需 Docker）
-cd src
-uvicorn assistant.main:app --host 0.0.0.0 --port 8000
+# 4. 启动（SQLite，无需 Docker）
+cd src && uvicorn assistant.main:app --host 0.0.0.0 --port 8000 --reload
 
-# 4. 测试
+# 5. 验证
 curl http://localhost:8000/health
 curl -X POST http://localhost:8000/v1/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"你好","user_id":"u1"}'
 ```
+
+### 开发模式（详细说明）
 
 ### 生产部署（Docker Compose）
 
@@ -225,6 +294,7 @@ EOF
 
 ## 文档
 
+- [贡献指南](CONTRIBUTING.md) — 如何参与开发、提交 PR
 - [落地方案](docs/落地方案.md) — 8 周执行路线图（Phase 1-4 已完成）
 - [PRD](docs/PRD.md) — 产品需求文档
 - [DESIGN](docs/DESIGN.md) — 技术设计文档

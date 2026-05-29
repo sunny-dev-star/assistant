@@ -1,0 +1,73 @@
+name: Bug Report
+description: Report a reproducible bug in Nidari
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much detail as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: e.g. POST /v1/chat returns 500 when tool_calls exceed 3 rounds
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to reproduce the behavior.
+      placeholder: |
+        1. Set AUTH_ENABLED=false
+        2. POST /v1/chat with message "..."
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Nidari version / commit
+      placeholder: e.g. main @ 522d828 or v5.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: Deployment mode
+      options:
+        - Local dev (SQLite)
+        - Docker Compose
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste error logs or stack traces (redact secrets).
+      render: shell
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and did not find a duplicate
+          required: true
+        - label: I have redacted API keys and secrets from logs
+          required: true

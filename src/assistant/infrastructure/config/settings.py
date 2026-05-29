@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     """Application settings"""
 
     # App
-    APP_NAME: str = "Assistant"
+    APP_NAME: str = "Nidari"
     APP_VERSION: str = "5.0.0"
     ENV: str = "development"
     DEBUG: bool = True

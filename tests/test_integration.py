@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Assistant Framework - Integration Test Suite
+Nidari Framework - Integration Test Suite
 Usage: python3 tests/test_integration.py [BASE_URL] [AUTH_TOKEN]
 """
 import sys
@@ -47,7 +47,7 @@ def chat(message, user_id="u1", session_id=None):
 
 
 print("=" * 50)
-print("  Assistant Integration Test Suite")
+print("  Nidari Integration Test Suite")
 print(f"  Target: {BASE}")
 print(f"  Auth:   {'ON (Bearer)' if TOKEN else 'OFF (dev mode)'}")
 print("=" * 50)
@@ -62,7 +62,7 @@ else:
     f("Health check", f"got {r.status_code}")
 
 r = requests.get(f"{BASE}/", timeout=5)
-if r.status_code == 200 and "Assistant API" in r.text:
+if r.status_code == 200 and "Nidari API" in r.text:
     p("Root endpoint")
 else:
     f("Root endpoint", f"got {r.status_code}")

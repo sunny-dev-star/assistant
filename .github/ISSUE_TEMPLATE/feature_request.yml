@@ -1,0 +1,49 @@
+name: Feature Request
+description: Suggest an idea for Nidari
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem you want solved. Feature requests with a clear use case are easier to prioritize.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What problem does this solve? Who benefits?
+      placeholder: e.g. As a developer deploying for multiple clients, I need Feishu webhook support so each tenant can bind their own bot.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Multi-tenant / auth
+        - Skills / tools
+        - Channel adapter (WeChat / Feishu / DingTalk)
+        - MCP integration
+        - Monitoring / billing
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a PR for this feature
+        - label: I need guidance before implementing

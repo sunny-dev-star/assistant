@@ -1,4 +1,4 @@
-# 商业授权 / Commercial License
+# Nidari 商业授权 / Commercial License
 
 本项目采用**双授权（dual-license）**模式发行。
 

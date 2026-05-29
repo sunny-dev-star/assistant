@@ -119,7 +119,7 @@ async def lifespan(app: FastAPI):
 
     auth_status = "ON (Bearer token required)" if settings.AUTH_ENABLED else "OFF (dev mode, auto-tenant)"
     print(f"[Init] Auth: {auth_status}")
-    print("=== Assistant API v5.0 ready ===")
+    print("=== Nidari API v5.0 ready ===")
 
     yield
 
@@ -131,8 +131,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Assistant API",
-    description="Multi-tenant AI Agent Framework",
+    title="Nidari API",
+    description="Nidari — Multi-tenant AI Agent Framework",
     version="5.0.0",
     lifespan=lifespan,
 )
@@ -162,7 +162,7 @@ app.include_router(internal.router, tags=["Internal"])
 @app.get("/")
 async def root():
     return {
-        "service": "Assistant API",
+        "service": "Nidari API",
         "version": "5.0.0",
         "features": ["multi-tenant", "skill-sdk", "mcp", "litellm", "role-permissions"],
         "auth_enabled": settings.AUTH_ENABLED,
