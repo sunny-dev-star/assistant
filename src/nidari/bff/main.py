@@ -2,11 +2,16 @@
 BFF (Backend For Frontend) - Unified entry point for all frontend channels.
 Runs as a separate process on port 8001.
 """
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Path, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..infrastructure.config.settings import settings
+from ..infrastructure.logging import setup_logging
+
+setup_logging("bff", log_file="bff.log")
+logger = logging.getLogger(__name__)
 from ..infrastructure.persistence.database import async_session_factory, init_db
 from .middleware.jwt_auth import BFFJWTAuthMiddleware
 from .repositories.user_repo import BFFUserRepository
@@ -34,14 +39,21 @@ async def lifespan(app: FastAPI):
         PushDeviceModel, TenantFrontendConfigModel,
     )
     await init_db()
-    print("[BFF] Database tables ensured.")
+    logger.info("Database tables ensured")
 
     # Store shared objects in app.state
-    app.state.core_api_url = settings.CORE_API_URL if hasattr(settings, 'CORE_API_URL') else "http://localhost:8000"
-    app.state.internal_token = getattr(settings, 'INTERNAL_TOKEN', 'dev-internal-token')
+    app.state.core_api_url = settings.CORE_API_URL
+    app.state.internal_token = settings.INTERNAL_TOKEN
 
-    print(f"[BFF] Core API: {app.state.core_api_url}")
-    print("=== BFF API v1.0 ready ===")
+    logger.info("Core API: %s", app.state.core_api_url)
+
+    from ..shared.banner import print_startup_banner
+
+    print_startup_banner(
+        title="Nidari BFF",
+        version="1.0.0",
+        env=settings.ENV,
+    )
     yield
 
 
@@ -447,5 +459,9 @@ async def health():
 
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("assistant.bff.main:app", host="0.0.0.0", port=8001, reload=True)
+    from ..cli import run_server
+    run_server(
+        "nidari.bff.main:app",
+        default_port=8001,
+        description="Nidari BFF API server",
+    )

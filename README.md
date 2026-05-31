@@ -81,7 +81,7 @@ flowchart TB
 ## 项目结构
 
 ```
-├── src/assistant/                 # 核心应用
+├── src/nidari/                      # 核心应用
 │   ├── main.py                    # FastAPI 入口 + 生命周期管理
 │   ├── app/                       # 应用层（AppServices、UseCases）
 │   │   └── services/
@@ -187,7 +187,7 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # 4. 启动（SQLite，无需 Docker）
-cd src && uvicorn assistant.main:app --host 0.0.0.0 --port 8000 --reload
+cd src && python -m nidari --config-path ../res/conf/config.yaml --reload
 
 # 5. 验证
 curl http://localhost:8000/health

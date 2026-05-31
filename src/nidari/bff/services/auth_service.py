@@ -1,12 +1,15 @@
 """
 Unified authentication service for all channels.
 """
+import logging
 import bcrypt
 import jwt
 import uuid
 import time
 import hashlib
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -46,7 +49,7 @@ class AuthService:
         code = str(random.randint(100000, 999999))
         # In production: store in Redis with TTL 300s
         # await self.redis.setex(f"sms:{tenant_id}:{phone}", 300, code)
-        print(f"[SMS] code for {phone}: {code}")  # dev only
+        logger.info("SMS verification code for %s: %s", phone, code)  # dev only
         return code
 
     async def login_phone(self, tenant_id: str, phone: str, code: str, channel: str) -> dict:

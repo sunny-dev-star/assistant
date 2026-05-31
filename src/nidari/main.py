@@ -2,6 +2,7 @@
 HTTP API entry point - Multi-tenant with auth middleware + DB persistence + role-based permissions
 """
 import json
+import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -9,6 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .infrastructure.config.settings import settings
+from .infrastructure.logging import setup_logging
+
+setup_logging("nidari")
+logger = logging.getLogger(__name__)
 from .infrastructure.external_services.litellm_adapter import LiteLLMAdapter
 from .infrastructure.external_services.tool_gateway_adapter import ToolGatewayAdapter
 from .infrastructure.persistence.database_message_repository import DatabaseMessageRepository
@@ -32,9 +37,9 @@ async def lifespan(app: FastAPI):
         from .infrastructure.persistence.database import init_db
         try:
             await init_db()
-            print("[Init] Database tables ensured.")
+            logger.info("Database tables ensured")
         except Exception as e:
-            print(f"[Warning] DB init failed, falling back to in-memory: {e}")
+            logger.warning("DB init failed, falling back to in-memory: %s", e)
             use_db = False
 
     # 2. LLM Adapter
@@ -47,8 +52,8 @@ async def lifespan(app: FastAPI):
     skill_loader.load_all()
 
     info = skill_loader.get_skill_info()
-    print(f"[Init] LLM model: {settings.DEEPSEEK_MODEL}")
-    print(f"[Init] Skills: {skill_loader.skill_count}, Tools: {skill_loader.tool_count}")
+    logger.info("LLM model: %s", settings.DEEPSEEK_MODEL)
+    logger.info("Skills: %d, Tools: %d", skill_loader.skill_count, skill_loader.tool_count)
     for s in info:
         extras = []
         if s.get("has_references"):
@@ -56,29 +61,31 @@ async def lifespan(app: FastAPI):
         if s.get("has_scripts"):
             extras.append("scripts")
         extra = f" [{', '.join(extras)}]" if extras else ""
-        print(f"  - {s['id']}: {len(s['tools'])} tools{extra}")
+        logger.info("  - %s: %d tools%s", s["id"], len(s["tools"]), extra)
 
     # 4. MCP Client
     mcp_client = MCPClient()
     if settings.MCP_ENABLED and settings.MCP_SERVERS:
         try:
-            servers = json.loads(settings.MCP_SERVERS)
-            await mcp_client.connect_servers_from_config(servers)
+            mcp_servers = settings.MCP_SERVERS
+            if isinstance(mcp_servers, str):
+                mcp_servers = json.loads(mcp_servers)
+            await mcp_client.connect_servers_from_config(mcp_servers)
         except json.JSONDecodeError as e:
-            print(f"[Warning] MCP_SERVERS JSON parse error: {e}")
+            logger.warning("MCP_SERVERS JSON parse error: %s", e)
         except Exception as e:
-            print(f"[Warning] MCP init error: {e}")
+            logger.warning("MCP init error: %s", e)
 
     if mcp_client.server_count > 0:
-        print(f"[Init] MCP: {mcp_client.server_count} servers, {mcp_client.tool_count} tools")
+        logger.info("MCP: %d servers, %d tools", mcp_client.server_count, mcp_client.tool_count)
 
     # 5. Repositories - use DB-backed when available
     if use_db:
         message_repo = DatabaseMessageRepository()
-        print("[Init] Message repository: Database (SQLite)")
+        logger.info("Message repository: Database (SQLite)")
     else:
         message_repo = MemoryMessageRepository()
-        print("[Init] Message repository: In-Memory")
+        logger.info("Message repository: In-Memory")
 
     context_service = ConversationContextService(llm_port=llm_adapter)
 
@@ -108,18 +115,25 @@ async def lifespan(app: FastAPI):
     # 7. TaskScheduler (replaces old outbound scheduler)
     from .infrastructure.scheduler import TaskScheduler
     from .infrastructure.alerting.feishu_alert import FeishuAlerter
-    feishu_alerter = FeishuAlerter(webhook_url=settings.FEISHU_WEBHOOK_URL if hasattr(settings, 'FEISHU_WEBHOOK_URL') else "")
+    feishu_alerter = FeishuAlerter(webhook_url=settings.FEISHU_WEBHOOK_URL)
     scheduler = TaskScheduler(app_service=assistant_chat_app_service, alerter=feishu_alerter)
     await scheduler.start()
     app.state.scheduler = scheduler
-    print(f"[Init] TaskScheduler: {scheduler.job_count} tasks restored")
+    logger.info("TaskScheduler: %d tasks restored", scheduler.job_count)
 
     if use_db:
-        print("[Init] Role-based permissions: enabled (DB-backed)")
+        logger.info("Role-based permissions: enabled (DB-backed)")
 
     auth_status = "ON (Bearer token required)" if settings.AUTH_ENABLED else "OFF (dev mode, auto-tenant)"
-    print(f"[Init] Auth: {auth_status}")
-    print("=== Nidari API v5.0 ready ===")
+    logger.info("Auth: %s", auth_status)
+
+    from .shared.banner import print_startup_banner
+
+    print_startup_banner(
+        title="Nidari API",
+        version=settings.APP_VERSION,
+        env=settings.ENV,
+    )
 
     yield
 
@@ -179,7 +193,7 @@ async def metrics():
 
     try:
         from .infrastructure.metrics import app_info
-        app_info.info({"version": "5.0.0", "service": "assistant-api"})
+        app_info.info({"version": "5.0.0", "service": "nidari-api"})
     except Exception:
         pass
 
@@ -190,14 +204,12 @@ async def metrics():
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    import logging
-    logging.getLogger(__name__).error(f"Unhandled exception: {exc}", exc_info=True)
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
     return JSONResponse(status_code=500, content={
         "code": 5000, "message": f"Internal error: {str(exc)}", "data": None
     })
 
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000,
-                reload=settings.ENV == "development")
+    from .cli import run_server
+    run_server("nidari.main:app", default_port=8000, description="Nidari API server")

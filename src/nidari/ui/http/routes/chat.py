@@ -162,7 +162,7 @@ def _build_llm_config(tcfg: dict) -> LLMConfig:
         provider="openai_compat",
         model=tcfg.get("default_model", settings.DEEPSEEK_MODEL or "deepseek/deepseek-chat"),
         api_key=tcfg.get("llm_api_key") or settings.DEEPSEEK_API_KEY or None,
-        api_base=tcfg.get("llm_api_base") or (settings.DEEPSEEK_API_URL if hasattr(settings, 'DEEPSEEK_API_URL') and settings.DEEPSEEK_API_URL else None),
+        api_base=tcfg.get("llm_api_base") or settings.DEEPSEEK_API_URL or None,
         temperature=tcfg.get("llm_temperature", 0.7),
         max_tokens=tcfg.get("llm_max_tokens", 2048),
         # 视觉模型配置

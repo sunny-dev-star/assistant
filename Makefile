@@ -18,7 +18,7 @@ test:
 	cd src && pytest
 
 run:
-	cd src && uvicorn assistant.main:app --host 0.0.0.0 --port 8000 --reload
+	cd src && python -m nidari --config-path ../res/conf/config.yaml --reload
 
 docker-build:
 	docker-compose build

@@ -55,11 +55,11 @@ async def main() -> int:
 
     # Lazy import after env is set (settings reads DATABASE_URL)
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-    from assistant.infrastructure.persistence.database import async_session_factory
-    from assistant.infrastructure.persistence.sqlalchemy_tenant_repository import SQLAlchemyTenantRepository
-    from assistant.domain.entities.tenant import Tenant
-    from assistant.domain.value_objects.api_key import ApiKey
-    from assistant.domain.value_objects.quota import Quota
+    from nidari.infrastructure.persistence.database import async_session_factory
+    from nidari.infrastructure.persistence.sqlalchemy_tenant_repository import SQLAlchemyTenantRepository
+    from nidari.domain.entities.tenant import Tenant
+    from nidari.domain.value_objects.api_key import ApiKey
+    from nidari.domain.value_objects.quota import Quota
 
     async with async_session_factory() as session:
         repo = SQLAlchemyTenantRepository(session)

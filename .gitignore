@@ -36,3 +36,4 @@ postgres_data/
 redis_data/
 minio_data/
 memory/
+docs/

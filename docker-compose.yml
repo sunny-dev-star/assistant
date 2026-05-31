@@ -27,6 +27,7 @@ services:
     volumes:
       - ./skills:/app/skills
       - ./logs:/app/logs
+      - ./res/conf:/app/res/conf:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,7 +50,7 @@ services:
       context: .
       dockerfile: src/Dockerfile
     container_name: agent-bff
-    command: uvicorn assistant.bff.main:app --host 0.0.0.0 --port 8001
+    command: python -m nidari.bff --config-path /app/res/conf/config.yaml --host 0.0.0.0 --port 8001
     ports:
       - "8001:8001"
     environment:
@@ -61,6 +62,8 @@ services:
       - SMS_PROVIDER=${SMS_PROVIDER:-}
       - SMS_API_KEY=${SMS_API_KEY:-}
       - ENV=production
+    volumes:
+      - ./res/conf:/app/res/conf:ro
     depends_on:
       agent-engine:
         condition: service_healthy

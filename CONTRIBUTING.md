@@ -20,7 +20,7 @@ cp .env.example .env
 # 编辑 .env，至少填入 DEEPSEEK_API_KEY
 
 cd src
-uvicorn assistant.main:app --host 0.0.0.0 --port 8000 --reload
+cd src && python -m nidari --config-path ../res/conf/config.yaml --reload
 ```
 
 健康检查：

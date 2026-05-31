@@ -1,19 +1,18 @@
 """
 Internal API for scheduled tasks (called by skill scripts)
 """
-import os
 from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter(prefix="/internal")
+from ....infrastructure.config.settings import settings
 
-INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
+router = APIRouter(prefix="/internal")
 
 
 def verify_internal(request: Request):
     """Internal endpoint auth — shared secret or disabled in dev"""
-    if INTERNAL_TOKEN and request.headers.get("X-Internal-Token") != INTERNAL_TOKEN:
+    if settings.INTERNAL_TOKEN and request.headers.get("X-Internal-Token") != settings.INTERNAL_TOKEN:
         raise HTTPException(status_code=403, detail="Invalid internal token")
 
 

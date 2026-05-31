@@ -94,7 +94,7 @@ class BFFJWTAuthMiddleware(BaseHTTPMiddleware):
         tenant_id = parts[2] if len(parts) > 2 else None
 
         # For now use shared secret; in production per-tenant secret
-        secret = getattr(settings, "SECRET_KEY", "change-me-in-production")
+        secret = settings.BFF_JWT_SECRET or settings.SECRET_KEY
         return jwt.decode(token, secret, algorithms=["HS256"])
 
     def _is_public_bff_path(self, path: str, method: str) -> bool:

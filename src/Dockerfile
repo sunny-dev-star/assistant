@@ -11,8 +11,9 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY src/assistant/ ./assistant/
+# Copy source code and configuration
+COPY src/nidari/ ./nidari/
+COPY res/conf/ ./res/conf/
 COPY skills/ ./skills/
 COPY init.sql ./init.sql
 
@@ -24,4 +25,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run
-CMD ["uvicorn", "assistant.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "nidari", "--config-path", "/app/res/conf/config.yaml", "--host", "0.0.0.0", "--port", "8000"]

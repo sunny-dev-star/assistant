@@ -44,7 +44,7 @@ curl http://localhost:8000/health
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
-cd src && uvicorn assistant.main:app --host 0.0.0.0 --port 8000 --reload
+cd src && python -m nidari --config-path ../res/conf/config.yaml --reload
 ```
 
 ---

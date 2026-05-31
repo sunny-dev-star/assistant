@@ -1,0 +1,55 @@
+app:
+  name: Nidari
+  version: "5.0.0"
+  env: development
+  debug: true
+
+database:
+  url: sqlite+aiosqlite:///./assistant.db
+  pool_size: 10
+
+redis:
+  url: redis://localhost:6379/0
+
+llm:
+  deepseek:
+    api_url: https://api.deepseek.com/v1
+    api_key: ""
+    model: deepseek-chat
+    max_tokens: 2048
+    temperature: 0.7
+  dify:
+    api_url: http://localhost:5001
+    api_key: ""
+
+mcp:
+  enabled: false
+  servers: []
+
+auth:
+  enabled: false
+  secret_key: your-secret-key-change-in-production
+  access_token_expire_minutes: 1440
+
+bff:
+  core_api_url: http://localhost:8000
+  internal_token: dev-internal-token
+  jwt_secret: change-me-in-production
+  access_token_ttl: 10800
+  refresh_token_ttl: 2592000
+
+monitoring:
+  prometheus_enabled: true
+
+logging:
+  level: INFO
+  format: text
+  dir: logs
+  file: nidari.log
+  max_bytes: 10485760
+  backup_count: 5
+  to_console: true
+  to_file: true
+
+alerting:
+  feishu_webhook_url: ""

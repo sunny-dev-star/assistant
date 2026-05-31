@@ -22,14 +22,14 @@ os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{DB_PATH}"
 os.environ["AUTH_ENABLED"] = "false"
 os.environ["DEEPSEEK_API_KEY"] = "test-key"
 
-from assistant.infrastructure.persistence.database import async_session_factory, init_db
-from assistant.infrastructure.persistence.sqlalchemy_tenant_repository import SQLAlchemyTenantRepository
-from assistant.infrastructure.persistence.repositories.role_repo import RoleRepository
-from assistant.infrastructure.skill_loader import SkillLoader
-from assistant.domain.services.tenant_service import TenantService
-from assistant.domain.entities.tenant import Tenant
-from assistant.domain.value_objects.api_key import ApiKey
-from assistant.domain.value_objects.quota import Quota
+from nidari.infrastructure.persistence.database import async_session_factory, init_db
+from nidari.infrastructure.persistence.sqlalchemy_tenant_repository import SQLAlchemyTenantRepository
+from nidari.infrastructure.persistence.repositories.role_repo import RoleRepository
+from nidari.infrastructure.skill_loader import SkillLoader
+from nidari.domain.services.tenant_service import TenantService
+from nidari.domain.entities.tenant import Tenant
+from nidari.domain.value_objects.api_key import ApiKey
+from nidari.domain.value_objects.quota import Quota
 
 PASS = 0
 FAIL = 0
@@ -239,7 +239,7 @@ async def run_tests():
     print("Day 3: API 路由验证")
     print("=" * 60)
 
-    from assistant.main import app
+    from nidari.main import app
     route_paths = [r.path for r in app.routes if hasattr(r, "path")]
     for expected in [
         "/v1/admin/roles",

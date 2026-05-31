@@ -12,7 +12,7 @@ async def health_check():
     return {
         "status": "ok",
         "version": "1.0.0",
-        "service": "assistant"
+        "service": "nidari"
     }
 
 
